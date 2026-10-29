@@ -1,0 +1,24 @@
+version: "scoring-v1"
+
+# Points per component; must sum to 100.
+weights:
+  sla_breach: 35          # min(days_late / breach_days_cap, 1)
+  breach_probability: 15  # P(transit exceeds the time left before the SLA)
+  freight_weight: 20      # billable-weight tier (BULKY counts as 1.0)
+  order_value: 15         # percentile of order value among actionable orders
+  seller_reliability: 10  # seller historical late-delivery rate, capped
+  complexity: 5           # multi-seller / mixed-impact / multi-item orders
+
+breach_days_cap: 7
+seller_late_rate_cap: 0.5
+
+# Billable-weight tiers (kg, upper bound inclusive). Above the last tier, or BULKY profile -> 1.0
+weight_tiers:
+  - {max_kg: 5, value: 0.1}
+  - {max_kg: 10, value: 0.4}
+  - {max_kg: 30, value: 0.7}
+
+tiers:
+  critical: 75
+  high: 50
+  medium: 25

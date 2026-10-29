@@ -1,0 +1,11 @@
+Case (JSON):
+{{ case_json }}
+{% if transcript %}
+Your investigation so far:
+{{ transcript }}
+{% endif %}
+{% if must_decide %}
+This is your last step: decide now (APPLY_RULE_PLAN or DELAY_ALL) using what you have.
+{% else %}
+Step {{ step }} of {{ max_steps }}: call tools, or decide.
+{% endif %}

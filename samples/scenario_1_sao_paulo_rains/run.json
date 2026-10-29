@@ -1,0 +1,846 @@
+{
+ "run": {
+  "id": "4aa90221-bd7e-4c62-91a4-a4ae79a7d440",
+  "title": "Heavy rains delaying freight leaving Sao Paulo",
+  "raw_query": "Heavy rains are delaying all freight leaving Sao Paulo for the next 5 days",
+  "status": "succeeded",
+  "spec": {
+   "legs": [
+    "first_mile",
+    "linehaul"
+   ],
+   "notes": [],
+   "title": "Heavy rains delaying freight leaving Sao Paulo",
+   "origin": {
+    "cities": [],
+    "radius": null,
+    "states": [
+     "SP"
+    ]
+   },
+   "source": "llm",
+   "start_at": "2018-08-01T00:00:00",
+   "all_modes": false,
+   "confidence": 0.95,
+   "match_mode": "any",
+   "nationwide": false,
+   "seller_ids": [],
+   "ambiguities": [
+    {
+     "roles": [
+      "origin"
+     ],
+     "chosen": 0,
+     "reason": "'Sao Paulo' is both a state and a city. Defaulting to the state for freight disruptions; switch to the city if the event is local.",
+     "mention": "Sao Paulo",
+     "options": [
+      {
+       "city": null,
+       "kind": "state",
+       "label": "Sao Paulo state (SP)",
+       "state": "SP"
+      },
+      {
+       "city": {
+        "name": "sao paulo",
+        "label": "Sao Paulo, SP",
+        "state": "SP"
+       },
+       "kind": "city",
+       "label": "Sao Paulo, SP (city only)",
+       "state": "SP"
+      }
+     ]
+    }
+   ],
+   "destination": {
+    "cities": [],
+    "radius": null,
+    "states": []
+   },
+   "duration_days": 5.0,
+   "recovery_days": 2.0,
+   "category_terms": [],
+   "disruption_type": "weather",
+   "explicit_delay_days": null
+  },
+  "spec_source": "llm",
+  "options": {
+   "locale": "en",
+   "use_llm": true,
+   "date_rebase": false,
+   "max_llm_emails": 10
+  },
+  "llm_mode": "online",
+  "metrics": {
+   "stage_ms": {
+    "scout": 2070,
+    "intake": 18,
+    "analyst": 143,
+    "reporter": 25,
+    "qa_critic": 538,
+    "mitigation": 1300,
+    "customer_success": 64
+   },
+   "llm_usage": {
+    "calls": 11,
+    "cached": 10,
+    "errors": 1,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "latency_ms_total": 619
+   },
+   "duration_ms": 5075,
+   "llm_degraded": null,
+   "communications": {
+    "llm": 10,
+    "total": 679,
+    "template": 669,
+    "qa_failed": 0,
+    "qa_passed": 679,
+    "template_fallbacks": 0,
+    "llm_initial_failures": 0
+   },
+   "orders_delayed": 681,
+   "orders_in_scope": 1409,
+   "orders_breaching": 398,
+   "customers_contacted": 679
+  },
+  "error": null,
+  "created_at": "2026-10-29T03:16:49.180588Z",
+  "started_at": "2026-10-29T03:16:49.194344Z",
+  "finished_at": "2026-10-29T03:16:54.280469Z",
+  "config_snapshot": {
+   "llm": {
+    "models": {
+     "email": "gemini-3.5-flash",
+     "intake": "gemini-3.5-flash",
+     "summary": "gemini-3.5-flash",
+     "adjudicator": "gemini-3.5-flash"
+    },
+    "provider": "gemini",
+    "max_llm_emails": 25
+   },
+   "policy": {
+    "version": "policy-v1",
+    "alt_route": {
+     "min_gain_days": 1.0,
+     "freight_uplift": 0.6,
+     "extra_transit_days": 1.0
+    },
+    "alt_seller": {
+     "min_gain_days": 2.0,
+     "max_price_delta": 0.1
+    },
+    "compensation_tiers": [
+     {
+      "label": "Minor delay",
+      "max_days": 3,
+      "min_days": 1,
+      "voucher_pct": 0.0,
+      "freight_refund": true,
+      "voucher_cap_brl": 0.0
+     },
+     {
+      "label": "Moderate delay",
+      "max_days": 7,
+      "min_days": 4,
+      "voucher_pct": 10.0,
+      "freight_refund": true,
+      "voucher_cap_brl": 50.0
+     },
+     {
+      "label": "Major delay",
+      "max_days": null,
+      "min_days": 8,
+      "voucher_pct": 15.0,
+      "freight_refund": true,
+      "voucher_cap_brl": 100.0
+     }
+    ],
+    "human_callback_tiers": [
+     "critical"
+    ],
+    "low_class_confidence": 0.6,
+    "monitor_max_p_breach": 0.2,
+    "notify_min_shift_days": 2.0,
+    "perishable_cancel_days_late": 2,
+    "bulky_offer_cancel_days_late": 10,
+    "general_offer_cancel_days_late": 14,
+    "essential_offer_cancel_days_late": 3
+   },
+   "scoring": {
+    "tiers": {
+     "high": 50.0,
+     "medium": 25.0,
+     "critical": 75.0
+    },
+    "version": "scoring-v1",
+    "weights": {
+     "complexity": 5.0,
+     "sla_breach": 35.0,
+     "order_value": 15.0,
+     "freight_weight": 20.0,
+     "breach_probability": 15.0,
+     "seller_reliability": 10.0
+    },
+    "weight_tiers": [
+     {
+      "value": 0.1,
+      "max_kg": 5.0
+     },
+     {
+      "value": 0.4,
+      "max_kg": 10.0
+     },
+     {
+      "value": 0.7,
+      "max_kg": 30.0
+     }
+    ],
+    "breach_days_cap": 7.0,
+    "seller_late_rate_cap": 0.5
+   },
+   "assumptions": {
+    "params": {
+     "bulky_dim_cm": 100.0,
+     "heavy_min_kg": 15.0,
+     "medium_max_kg": 30.0,
+     "parcel_max_kg": 5.0,
+     "last_mile_days": 1.0,
+     "recovery_factor": 0.3,
+     "lane_min_samples": 30,
+     "bulky_sum_dims_cm": 200.0,
+     "origin_dwell_days": 1.0,
+     "parcel_max_dim_cm": 60.0,
+     "volumetric_divisor": 6000.0,
+     "partial_impact_factor": 1.0,
+     "alt_seller_recency_days": 90
+    },
+    "version": "assumptions-v1"
+   },
+   "embed_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+   "prompt_versions": {
+    "email": "email-v3",
+    "intake": "intake-v1",
+    "narrative": "narrative-v2",
+    "adjudicator": "adjudicator-v1",
+    "investigator": "investigator-v1"
+   },
+   "category_classes_version": "classes-v1"
+  }
+ },
+ "summary": {
+  "run_id": "4aa90221-bd7e-4c62-91a4-a4ae79a7d440",
+  "stats": {
+   "cost": {
+    "total_brl": 9654.09,
+    "refunds_brl": 5195.59,
+    "vouchers_brl": 1318.76,
+    "reroute_extra_brl": 3139.74
+   },
+   "flags": {
+    "needs_review": 0,
+    "human_callback": 8,
+    "split_shipment": 3,
+    "adjudicated_by_llm": 6,
+    "offer_cancellation": 13,
+    "investigated_by_agent": 2
+   },
+   "scope": {
+    "skus_delayed": 624,
+    "avg_hold_days": 6.4,
+    "items_delayed": 811,
+    "orders_delayed": 681,
+    "gmv_delayed_brl": 106167.17,
+    "orders_in_scope": 1409,
+    "sellers_delayed": 329,
+    "orders_breaching": 398,
+    "customers_delayed": 679,
+    "billable_kg_delayed": 2627.5,
+    "bulky_orders_delayed": 6,
+    "orders_newly_breaching": 288,
+    "avg_days_late_breaching": 5.2
+   },
+   "actions": {
+    "MONITOR": 728,
+    "NOTIFY_ONLY": 283,
+    "CANCEL_REFUND": 10,
+    "REROUTE_ALT_ROUTE": 325,
+    "REROUTE_ALT_SELLER": 1,
+    "DELAY_WITH_COMPENSATION": 62
+   },
+   "severity": {
+    "low": 242,
+    "high": 164,
+    "medium": 267,
+    "critical": 8
+   },
+   "top_lanes": [
+    {
+     "lane": "SP->SP",
+     "items": 422
+    },
+    {
+     "lane": "SP->RJ",
+     "items": 86
+    },
+    {
+     "lane": "SP->MG",
+     "items": 74
+    },
+    {
+     "lane": "SP->RS",
+     "items": 38
+    },
+    {
+     "lane": "SP->BA",
+     "items": 28
+    },
+    {
+     "lane": "SP->PR",
+     "items": 25
+    },
+    {
+     "lane": "SP->SC",
+     "items": 25
+    },
+    {
+     "lane": "SP->DF",
+     "items": 19
+    },
+    {
+     "lane": "SP->GO",
+     "items": 17
+    },
+    {
+     "lane": "SP->ES",
+     "items": 15
+    }
+   ],
+   "dest_states": {
+    "AM": 1,
+    "BA": 25,
+    "CE": 6,
+    "DF": 19,
+    "ES": 9,
+    "GO": 7,
+    "MA": 1,
+    "MG": 65,
+    "MS": 7,
+    "MT": 5,
+    "PA": 9,
+    "PB": 6,
+    "PE": 13,
+    "PI": 2,
+    "PR": 22,
+    "RJ": 68,
+    "RN": 1,
+    "RO": 1,
+    "RS": 29,
+    "SC": 24,
+    "SE": 2,
+    "SP": 357,
+    "TO": 2
+   },
+   "top_sellers": [
+    {
+     "city": "sao paulo",
+     "state": "SP",
+     "orders": 25,
+     "seller_id": "6560211a19b47992c3666cc44a7e94c0",
+     "value_brl": 1840.67
+    },
+    {
+     "city": "itaquaquecetuba",
+     "state": "SP",
+     "orders": 24,
+     "seller_id": "7c67e1448b00f6e969d365cea6b010ab",
+     "value_brl": 6150.51
+    },
+    {
+     "city": "sao paulo",
+     "state": "SP",
+     "orders": 19,
+     "seller_id": "1025f0e2d44d7041d6cf58b6550e0bfa",
+     "value_brl": 5282.49
+    },
+    {
+     "city": "praia grande",
+     "state": "SP",
+     "orders": 19,
+     "seller_id": "d91fb3b7d041e83b64a00a3edfb37e4f",
+     "value_brl": 1679.65
+    },
+    {
+     "city": "guarulhos",
+     "state": "SP",
+     "orders": 14,
+     "seller_id": "beadbee30901a7f61d031b6b686095ad",
+     "value_brl": 1384.19
+    },
+    {
+     "city": "atibaia",
+     "state": "SP",
+     "orders": 9,
+     "seller_id": "16090f2ca825584b5a147ab24aa30c86",
+     "value_brl": 400.22
+    },
+    {
+     "city": "salto",
+     "state": "SP",
+     "orders": 9,
+     "seller_id": "213b25e6f54661939f11710a6fddb871",
+     "value_brl": 1257.95
+    },
+    {
+     "city": "hortolandia",
+     "state": "SP",
+     "orders": 9,
+     "seller_id": "c70c1b0d8ca86052f45a432a38b73958",
+     "value_brl": 1066.23
+    },
+    {
+     "city": "praia grande",
+     "state": "SP",
+     "orders": 9,
+     "seller_id": "e9779976487b77c6d4ac45f75ec7afe9",
+     "value_brl": 689.77
+    },
+    {
+     "city": "piracicaba",
+     "state": "SP",
+     "orders": 8,
+     "seller_id": "da8622b14eb17ae2831f4ac5b9dab84a",
+     "value_brl": 820.91
+    }
+   ],
+   "origin_states": {
+    "SP": 811
+   },
+   "communications": {
+    "llm": 10,
+    "total": 679,
+    "template": 669,
+    "qa_failed": 0,
+    "qa_passed": 679,
+    "template_fallbacks": 0,
+    "llm_initial_failures": 0
+   },
+   "top_categories": [
+    {
+     "items": 65,
+     "orders": 64,
+     "category": "Health Beauty",
+     "value_brl": 8331.83
+    },
+    {
+     "items": 89,
+     "orders": 64,
+     "category": "Housewares",
+     "value_brl": 13313.82
+    },
+    {
+     "items": 82,
+     "orders": 63,
+     "category": "Bed Bath Table",
+     "value_brl": 10603.72
+    },
+    {
+     "items": 46,
+     "orders": 44,
+     "category": "Watches Gifts",
+     "value_brl": 9931.88
+    },
+    {
+     "items": 50,
+     "orders": 42,
+     "category": "Sports Leisure",
+     "value_brl": 4738.47
+    },
+    {
+     "items": 40,
+     "orders": 39,
+     "category": "Auto",
+     "value_brl": 4217.59
+    },
+    {
+     "items": 64,
+     "orders": 38,
+     "category": "Furniture Decor",
+     "value_brl": 9139.92
+    },
+    {
+     "items": 35,
+     "orders": 34,
+     "category": "Baby",
+     "value_brl": 4220.72
+    },
+    {
+     "items": 41,
+     "orders": 30,
+     "category": "Office Furniture",
+     "value_brl": 7914.35
+    },
+    {
+     "items": 27,
+     "orders": 26,
+     "category": "Telephony",
+     "value_brl": 1324.57
+    }
+   ],
+   "heaviest_delayed_items": [
+    {
+     "profile": "BULKY",
+     "category": "Housewares",
+     "order_id": "076d1555fb53a89b0ef4d529e527a0f6",
+     "product_id": "a3cd9517ebf5a50dca25acce54f3b171",
+     "billable_kg": 47.12,
+     "seller_state": "SP"
+    },
+    {
+     "profile": "MEDIUM",
+     "category": "Housewares",
+     "order_id": "4375cac0cfa2a87273ea83c661bdfcca",
+     "product_id": "0d8c593f5408c0e5d59f850bb0a7b499",
+     "billable_kg": 29.7,
+     "seller_state": "SP"
+    },
+    {
+     "profile": "MEDIUM",
+     "category": "Bed Bath Table",
+     "order_id": "951e4d60c61ab5e6589ece585e40311c",
+     "product_id": "f1baace9e7cf087eaa42ca6716ec1359",
+     "billable_kg": 27.44,
+     "seller_state": "SP"
+    },
+    {
+     "profile": "MEDIUM",
+     "category": "Baby",
+     "order_id": "bc9c2fb123725ad0d99fb76888543245",
+     "product_id": "9fe7f92d158e1d98ee0b32849b893677",
+     "billable_kg": 26.0,
+     "seller_state": "SP"
+    },
+    {
+     "profile": "MEDIUM",
+     "category": "Furniture Decor",
+     "order_id": "f92b34d1e66d16dfe85adfbf914dee86",
+     "product_id": "f0f34793b31e7353a0d77fed40bdb196",
+     "billable_kg": 25.33,
+     "seller_state": "SP"
+    },
+    {
+     "profile": "MEDIUM",
+     "category": "Office Furniture",
+     "order_id": "9254ea56fb8aecea0b411b6a605e0ebb",
+     "product_id": "613221d716be89edd3bb436c8060cd05",
+     "billable_kg": 22.7,
+     "seller_state": "SP"
+    },
+    {
+     "profile": "MEDIUM",
+     "category": "Bed Bath Table",
+     "order_id": "2aa8454e751e7fc82eba1192b4e49aad",
+     "product_id": "c4c428c423b8dfbfeae8ecd499d9a048",
+     "billable_kg": 21.4,
+     "seller_state": "SP"
+    },
+    {
+     "profile": "MEDIUM",
+     "category": "Bed Bath Table",
+     "order_id": "a98f79318168a3b20eca9c4530909f49",
+     "product_id": "591d4f16311726b70ab348c9e3c49a33",
+     "billable_kg": 21.0,
+     "seller_state": "SP"
+    },
+    {
+     "profile": "MEDIUM",
+     "category": "Bed Bath Table",
+     "order_id": "70a3acb4b096f675be6a2e03e2fb67bd",
+     "product_id": "c49c7c01a63850cb995c304b97c11bcd",
+     "billable_kg": 21.0,
+     "seller_state": "SP"
+    },
+    {
+     "profile": "MEDIUM",
+     "category": "Office Furniture",
+     "order_id": "e158e6aaed1732fbac39e9411f33f48a",
+     "product_id": "914c9e9af640dd56f48764a225b00f89",
+     "billable_kg": 20.91,
+     "seller_state": "SP"
+    }
+   ]
+  },
+  "retrieval": {
+   "mode": "hybrid+rerank",
+   "queries": [
+    {
+     "hits": [
+      {
+       "score": 0.023226,
+       "title": "Order 213387D0 | awaiting carrier pickup | Mogi das Cruzes/SP -> Sao Paulo/SP",
+       "ref_id": "213387d0c127ddbc06eda8fcfe0c6603",
+       "snippet": "Order 213387d0c127ddbc06eda8fcfe0c6603 | stage: awaiting carrier pickup | purchased 2018-07-31 | promised by 2018-08-08\nTags: big bulky freight general grande heavy item large merchandise oversized pesado volumoso\nItems: 1x Stationery (pape",
+       "doc_type": "order",
+       "dense_rank": 76,
+       "sparse_rank": 3,
+       "rerank_score": -0.334
+      },
+      {
+       "score": 0.02414,
+       "title": "Order D78BEF62 | in transit | Sao Paulo/SP -> Jales/SP",
+       "ref_id": "d78bef62e60a0f652567877da822b8b0",
+       "snippet": "Order d78bef62e60a0f652567877da822b8b0 | stage: in transit | purchased 2018-07-25 | promised by 2018-08-10\nTags: big breakable bulky delicate fragil fragile freight grande heavy item large oversized pesado volumoso\nItems: 1x Musical Instrum",
+       "doc_type": "order",
+       "dense_rank": 46,
+       "sparse_rank": 8,
+       "rerank_score": -1.0671
+      },
+      {
+       "score": 0.031054,
+       "title": "Order 929DDF60 | in transit | Sao Paulo/SP -> Viamao/RS",
+       "ref_id": "929ddf60e51592cf31ad60152b4c8fe3",
+       "snippet": "Order 929ddf60e51592cf31ad60152b4c8fe3 | stage: in transit | purchased 2018-07-26 | promised by 2018-08-17\nTags: big breakable bulky delicate fragil fragile freight grande heavy item large oversized pesado volumoso\nItems: 1x Musical Instrum",
+       "doc_type": "order",
+       "dense_rank": 2,
+       "sparse_rank": 7,
+       "rerank_score": -1.1873
+      },
+      {
+       "score": 0.015152,
+       "title": "Order 8A7C3A3A | awaiting carrier pickup | Guarulhos/SP -> Sao Paulo/SP",
+       "ref_id": "8a7c3a3a48dbc1c76fb4e7e5844d5584",
+       "snippet": "Order 8a7c3a3a48dbc1c76fb4e7e5844d5584 | stage: awaiting carrier pickup | purchased 2018-07-25 | promised by 2018-08-16\nTags: appliances big bulky casa freight furniture goods grande heavy home household item large moveis oversized pesado v",
+       "doc_type": "order",
+       "dense_rank": null,
+       "sparse_rank": 6,
+       "rerank_score": -1.307
+      },
+      {
+       "score": 0.015385,
+       "title": "Order 5BFCE111 | awaiting carrier pickup | Itaquaquecetuba/SP -> Sao Paulo/SP",
+       "ref_id": "5bfce111a3fc0a622ab552626165ab2f",
+       "snippet": "Order 5bfce111a3fc0a622ab552626165ab2f | stage: awaiting carrier pickup | purchased 2018-07-17 | promised by 2018-08-16\nTags: appliances big bulky casa freight furniture goods grande heavy home household item large moveis oversized pesado v",
+       "doc_type": "order",
+       "dense_rank": null,
+       "sparse_rank": 5,
+       "rerank_score": -1.5864
+      }
+     ],
+     "query": "Heavy rains delaying freight leaving Sao Paulo",
+     "purpose": "Most relevant impacted orders",
+     "doc_types": [
+      "order"
+     ],
+     "restricted_to_scope": true
+    },
+    {
+     "hits": [
+      {
+       "score": 0.031545,
+       "title": "Housewares | 47.1 kg | BULKY",
+       "ref_id": "a3cd9517ebf5a50dca25acce54f3b171",
+       "snippet": "Product a3cd9517ebf5a50dca25acce54f3b171 | category Housewares (utilidades_domesticas)\nTags: heavy bulky oversized large freight big item volumoso pesado grande furniture home goods household appliances moveis casa\nClass FURNITURE_HOME | ha",
+       "doc_type": "product",
+       "dense_rank": 1,
+       "sparse_rank": 6,
+       "rerank_score": 8.6662
+      },
+      {
+       "score": 0.026862,
+       "title": "Office Furniture | 13.9 kg | BULKY",
+       "ref_id": "f4f4debbcfcafe6858d1e37a1f6e436e",
+       "snippet": "Product f4f4debbcfcafe6858d1e37a1f6e436e | category Office Furniture (moveis_escritorio)\nTags: heavy bulky oversized large freight big item volumoso pesado grande furniture home goods household appliances moveis casa\nClass FURNITURE_HOME | ",
+       "doc_type": "product",
+       "dense_rank": 31,
+       "sparse_rank": 3,
+       "rerank_score": 8.6206
+      },
+      {
+       "score": 0.031281,
+       "title": "Furniture Decor | 17.0 kg | BULKY",
+       "ref_id": "f25f304f0e7163a29c271960a6704b0f",
+       "snippet": "Product f25f304f0e7163a29c271960a6704b0f | category Furniture Decor (moveis_decoracao)\nTags: heavy bulky oversized large freight big item volumoso pesado grande furniture home goods household appliances moveis casa\nClass FURNITURE_HOME | ha",
+       "doc_type": "product",
+       "dense_rank": 6,
+       "sparse_rank": 2,
+       "rerank_score": 8.5817
+      },
+      {
+       "score": 0.030331,
+       "title": "Office Furniture | 20.4 kg | BULKY",
+       "ref_id": "ff37b24bee4345bc69d11fae0e6cd3da",
+       "snippet": "Product ff37b24bee4345bc69d11fae0e6cd3da | category Office Furniture (moveis_escritorio)\nTags: heavy bulky oversized large freight big item volumoso pesado grande furniture home goods household appliances moveis casa\nClass FURNITURE_HOME | ",
+       "doc_type": "product",
+       "dense_rank": 8,
+       "sparse_rank": 4,
+       "rerank_score": 8.5106
+      },
+      {
+       "score": 0.032018,
+       "title": "Furniture Decor | 6.0 kg | BULKY",
+       "ref_id": "032e8352e7d34cc2558d4ae22132866c",
+       "snippet": "Product 032e8352e7d34cc2558d4ae22132866c | category Furniture Decor (moveis_decoracao)\nTags: heavy bulky oversized large freight big item volumoso pesado grande furniture home goods household appliances moveis casa\nClass FURNITURE_HOME | ha",
+       "doc_type": "product",
+       "dense_rank": 4,
+       "sparse_rank": 1,
+       "rerank_score": 8.5061
+      }
+     ],
+     "query": "heavy bulky oversized large items furniture home appliances",
+     "purpose": "Heavy / bulky impacted products",
+     "doc_types": [
+      "product"
+     ],
+     "restricted_to_scope": true
+    },
+    {
+     "hits": [
+      {
+       "score": 0.02388,
+       "title": "Seller 4deebb31 | Sao Paulo, SP",
+       "ref_id": "4deebb3199eeafb282ae33229144f94b",
+       "snippet": "Seller 4deebb3199eeafb282ae33229144f94b located in Sao Paulo, SP\nTags: general merchandise\nSells: Signaling And Security\nActive orders in the snapshot: 1\nHistorical late-delivery rate: 33%\nMedian handling time: 3.2 days",
+       "doc_type": "seller",
+       "dense_rank": 8,
+       "sparse_rank": 49,
+       "rerank_score": -6.0853
+      },
+      {
+       "score": 0.022918,
+       "title": "Seller 323ce52b | Sao Paulo, SP",
+       "ref_id": "323ce52b5b81df2cd804b017b7f09aa7",
+       "snippet": "Seller 323ce52b5b81df2cd804b017b7f09aa7 located in Sao Paulo, SP\nTags: general merchandise\nSells: Stationery\nActive orders in the snapshot: 1\nHistorical late-delivery rate: 11%\nMedian handling time: 3.6 days",
+       "doc_type": "seller",
+       "dense_rank": 23,
+       "sparse_rank": 32,
+       "rerank_score": -6.1442
+      },
+      {
+       "score": 0.025894,
+       "title": "Seller 189ca353 | Sao Paulo, SP",
+       "ref_id": "189ca3538ce9f920cacf0f982cbe223b",
+       "snippet": "Seller 189ca3538ce9f920cacf0f982cbe223b located in Sao Paulo, SP\nTags: general merchandise\nSells: Stationery\nActive orders in the snapshot: 1\nHistorical late-delivery rate: 0%\nMedian handling time: 0.6 days",
+       "doc_type": "seller",
+       "dense_rank": 22,
+       "sparse_rank": 13,
+       "rerank_score": -6.1887
+      },
+      {
+       "score": 0.021514,
+       "title": "Seller 6bb66d98 | Sao Paulo, SP",
+       "ref_id": "6bb66d9870c2e01c05655c7ed0e7ee13",
+       "snippet": "Seller 6bb66d9870c2e01c05655c7ed0e7ee13 located in Sao Paulo, SP\nTags: general merchandise\nSells: Item\nActive orders in the snapshot: 2\nHistorical late-delivery rate: 0%\nMedian handling time: 0.4 days",
+       "doc_type": "seller",
+       "dense_rank": 14,
+       "sparse_rank": 65,
+       "rerank_score": -6.203
+      },
+      {
+       "score": 0.021629,
+       "title": "Seller cfe94489 | Sao Paulo, SP",
+       "ref_id": "cfe94489ddd337d1e29e12f2a7205d10",
+       "snippet": "Seller cfe94489ddd337d1e29e12f2a7205d10 located in Sao Paulo, SP\nTags: general merchandise\nSells: Construction Tools Safety\nActive orders in the snapshot: 1\nHistorical late-delivery rate: 6%\nMedian handling time: 1.9 days",
+       "doc_type": "seller",
+       "dense_rank": 1,
+       "sparse_rank": 131,
+       "rerank_score": -6.4055
+      }
+     ],
+     "query": "Heavy rains delaying freight leaving Sao Paulo",
+     "purpose": "Most exposed impacted sellers",
+     "doc_types": [
+      "seller"
+     ],
+     "restricted_to_scope": true
+    },
+    {
+     "hits": [
+      {
+       "score": 0.029437,
+       "title": "Mitigation Playbook: Bulky and heavy freight",
+       "ref_id": "mitigation_playbook#bulky-and-heavy-freight",
+       "snippet": "Bulky and heavy freight\nRerouting bulky freight (over 30 kg billable, any side over 100 cm, or a combined size over 200 cm) is uneconomical and risky. Keep the shipment on its original route, tell the customer about the delay and compensate",
+       "doc_type": "policy",
+       "dense_rank": 10,
+       "sparse_rank": 6,
+       "rerank_score": 2.0618
+      },
+      {
+       "score": 0.029469,
+       "title": "Mitigation Playbook: Standard delays",
+       "ref_id": "mitigation_playbook#standard-delays",
+       "snippet": "Standard delays\nFor all other late orders, keep the shipment on its route, send a clear and empathetic update with the new delivery window, and apply the compensation tier that matches the number of days late.",
+       "doc_type": "policy",
+       "dense_rank": 11,
+       "sparse_rank": 5,
+       "rerank_score": 0.3274
+      },
+      {
+       "score": 0.029139,
+       "title": "Mitigation Playbook: Long delays",
+       "ref_id": "mitigation_playbook#long-delays",
+       "snippet": "Long delays\nAny order more than fourteen days late gets a no-fee cancellation offer in addition to compensation, whatever its product type.",
+       "doc_type": "policy",
+       "dense_rank": 14,
+       "sparse_rank": 4,
+       "rerank_score": 0.3043
+      },
+      {
+       "score": 0.031754,
+       "title": "Mitigation Playbook: Reroute via alternate route",
+       "ref_id": "mitigation_playbook#reroute-via-alternate-route",
+       "snippet": "Reroute via alternate route\nSmall parcels (up to 5 kg billable and 60 cm on the longest side) that are blocked at origin or on the linehaul can move to an alternate carrier or air corridor. This costs about 60% more freight and adds one day",
+       "doc_type": "policy",
+       "dense_rank": 4,
+       "sparse_rank": 2,
+       "rerank_score": 0.0766
+      },
+      {
+       "score": 0.031258,
+       "title": "Mitigation Playbook: Reroute via alternate seller",
+       "ref_id": "mitigation_playbook#reroute-via-alternate-seller",
+       "snippet": "Reroute via alternate seller\nIf the order has not yet been handed to the carrier and the same product is sold by another seller outside the disrupted area, fulfil it from that seller when all of the following hold:\n- the alternate seller so",
+       "doc_type": "policy",
+       "dense_rank": 5,
+       "sparse_rank": 3,
+       "rerank_score": -0.6647
+      }
+     ],
+     "query": "weather disruption delay mitigation reroute compensation",
+     "purpose": "Applicable policy",
+     "doc_types": [
+      "policy"
+     ],
+     "restricted_to_scope": false
+    }
+   ],
+   "concepts": [],
+   "scope_check": {
+    "n": 200,
+    "recall": 0.87,
+    "verified": 174,
+    "precision": 0.87,
+    "retrieved": 200
+   }
+  },
+  "headline": "Heavy rains delaying freight leaving Sao Paulo impacting 681 orders and R$ 106,167.17 in GMV.",
+  "narrative": "Heavy rains delaying freight leaving Sao Paulo have created an ongoing supply chain disruption spanning a duration of 5.0 days with a forecasted recovery of 2.0 days. Out of 1,409 orders in scope, exactly 681 orders are delayed, impacting 679 customers, 329 sellers, and 624 SKUs. This delay puts 398 orders breaching promise, representing 58 percent of delayed breaching, which includes 288 orders newly breaching. The disruption has placed R$ 106,167.17 in GMV delayed brl at risk with an average hold of 6.4 days, affecting 6 bulky orders delayed and a severity breakdown of 8 critical, 164 high, 267 medium, and 242 low severity counts. Top impacted categories include Health Beauty with 64 delayed orders, Housewares with 64 delayed orders, and Bed Bath Table with 63 delayed orders, while the top origin states by delayed items is SP with 811 delayed items. To address this, the mitigation plan deploys specific operational actions including cancel and refund (perishable) for 10, delay with compensation for 62, monitor only (no customer contact) for 728, proactive heads-up (still on time) for 283, reroute via alternate carrier/air for 325, and re-source from an alternate seller for 1, keeping total estimated mitigation cost brl at R$ 9,654.09.",
+  "recommendations": [
+   "Assign customer care to call the 8 critical-severity customers before the emails go out.",
+   "Pre-book alternate carrier or air capacity for 325 parcel orders blocked on the affected legs.",
+   "Confirm stock with the alternate sellers for 1 order being re-sourced outside the disrupted area.",
+   "Contact the most exposed sellers to hold or re-plan handovers: 6560211a (Sao Paulo/SP, 25 orders), 7c67e144 (Itaquaquecetuba/SP, 24 orders), 1025f0e2 (Sao Paulo/SP, 19 orders).",
+   "Review and approve the customer emails, starting with the 398 orders that will miss the promised date (sorted by severity on the Customer emails tab).",
+   "Plan dedicated recovery capacity for 6 bulky orders; bulky freight clears the backlog last.",
+   "Process 10 proactive cancellations of perishable goods and trigger the refunds."
+  ],
+  "number_check": {
+   "attempt": 1,
+   "checked": true,
+   "problems": []
+  },
+  "generator": "llm"
+ }
+}

@@ -1,0 +1,27 @@
+version: "policy-v1"
+
+# Rule thresholds. The rules themselves are code in app/services/policy_engine.py (R0..R8).
+monitor_max_p_breach: 0.2          # R0: no delay and low breach risk -> monitor only
+notify_min_shift_days: 2.0         # R1: ETA moved at least this much but still within SLA -> heads-up (or breach risk >= 20%)
+perishable_cancel_days_late: 2     # R2
+essential_offer_cancel_days_late: 3
+bulky_offer_cancel_days_late: 10   # R5
+general_offer_cancel_days_late: 14 # R7
+low_class_confidence: 0.6          # below this -> needs review when late
+
+alt_seller:
+  max_price_delta: 0.10
+  min_gain_days: 2.0
+
+alt_route:
+  min_gain_days: 1.0
+  extra_transit_days: 1.0
+  freight_uplift: 0.6
+
+# Compensation by calendar days late (after mitigation). Amounts in BRL.
+compensation_tiers:
+  - {min_days: 1, max_days: 3, freight_refund: true, voucher_pct: 0, voucher_cap_brl: 0, label: "Minor delay"}
+  - {min_days: 4, max_days: 7, freight_refund: true, voucher_pct: 10, voucher_cap_brl: 50, label: "Moderate delay"}
+  - {min_days: 8, max_days: null, freight_refund: true, voucher_pct: 15, voucher_cap_brl: 100, label: "Major delay"}
+
+human_callback_tiers: [critical]

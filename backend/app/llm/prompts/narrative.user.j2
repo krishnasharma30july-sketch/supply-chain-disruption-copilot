@@ -1,0 +1,6 @@
+Facts (JSON):
+{{ facts_json }}
+{% if feedback %}
+Your previous answer was rejected because it used numbers that are not in the facts: {{ feedback }}
+Use only the numbers in the facts.
+{% endif %}

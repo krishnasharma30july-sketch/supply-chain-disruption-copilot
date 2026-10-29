@@ -1,0 +1,73 @@
+version: "classes-v1"
+
+# Categories missing from product_category_name_translation.csv
+manual_translations:
+  pc_gamer: pc_gamer
+  portateis_cozinha_e_preparadores_de_alimentos: kitchen_portables_and_food_preparers
+
+default_class: STANDARD
+
+classes:
+  PERISHABLE:
+    - alimentos
+    - alimentos_bebidas
+    - bebidas
+    - flores
+  ESSENTIAL:
+    - fraldas_higiene
+    - bebes
+    - beleza_saude
+    - pet_shop
+  FRAGILE:
+    - instrumentos_musicais
+    - cine_foto
+    - la_cuisine
+    - artes
+  HIGH_VALUE_TECH:
+    - informatica_acessorios
+    - telefonia
+    - telefonia_fixa
+    - eletronicos
+    - pcs
+    - pc_gamer
+    - consoles_games
+    - tablets_impressao_imagem
+    - audio
+  GIFT_SEASONAL:
+    - relogios_presentes
+    - artigos_de_natal
+    - artigos_de_festas
+    - brinquedos
+    - cool_stuff
+  FURNITURE_HOME:
+    - moveis_decoracao
+    - moveis_escritorio
+    - moveis_sala
+    - moveis_quarto
+    - moveis_cozinha_area_de_servico_jantar_e_jardim
+    - moveis_colchao_e_estofado
+    - cama_mesa_banho
+    - casa_conforto
+    - casa_conforto_2
+    - utilidades_domesticas
+    - eletrodomesticos
+    - eletrodomesticos_2
+    - eletroportateis
+    - portateis_casa_forno_e_cafe
+    - portateis_cozinha_e_preparadores_de_alimentos
+    - climatizacao
+    - casa_construcao
+    - ferramentas_jardim
+
+# Keyword concepts used to resolve free-text product terms in a disruption ("bulky", "perishable", ...).
+# Semantic similarity against category documents complements these lists.
+concept_keywords:
+  profiles:
+    HEAVY_BULKY: [heavy, bulky, oversized, large, big, volumoso, volumosos, pesado, pesados, grande, grandes]
+  classes:
+    PERISHABLE: [perishable, perishables, food, foods, fresh, beverage, beverages, drinks, flower, flowers, perecivel, pereciveis, alimento, alimentos, bebida, bebidas, flores]
+    ESSENTIAL: [essential, essentials, baby, diapers, diaper, health, medicine, medical, hygiene, pet, fraldas, saude, bebe]
+    FRAGILE: [fragile, glass, breakable, delicate, fragil, frageis, vidro]
+    HIGH_VALUE_TECH: [electronics, electronic, tech, technology, gadget, gadgets, phone, phones, smartphone, computer, computers, laptop, laptops, eletronicos, celular, informatica]
+    GIFT_SEASONAL: [gift, gifts, christmas, toy, toys, party, seasonal, presente, presentes, natal, brinquedo, brinquedos]
+    FURNITURE_HOME: [home, household, housewares, homeware, appliance, appliances, casa, moveis, eletrodomestico, eletrodomesticos]

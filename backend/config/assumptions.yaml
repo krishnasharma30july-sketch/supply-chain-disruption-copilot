@@ -1,0 +1,95 @@
+version: "assumptions-v1"
+
+# Numeric parameters used by the deterministic engine. Every run snapshots these values.
+params:
+  origin_dwell_days: 1.0        # A7: a shipment spends this long inside the origin (and destination) region on the linehaul
+  recovery_factor: 0.3          # A8: backlog recovery = ceil(recovery_factor * duration) days
+  partial_impact_factor: 1.0    # A8: share of the stuck time a held shipment actually loses (backtest calibrates it)
+  last_mile_days: 1.0           # A5: final day of the journey is the last-mile leg
+  volumetric_divisor: 6000      # A9: L*W*H (cm) / 6000 = volumetric kg
+  parcel_max_kg: 5.0            # A10
+  parcel_max_dim_cm: 60.0       # A10
+  medium_max_kg: 30.0           # A10
+  bulky_dim_cm: 100.0           # A10
+  bulky_sum_dims_cm: 200.0      # A10
+  heavy_min_kg: 15.0            # "heavy/bulky" concept = BULKY profile or billable weight >= this
+  lane_min_samples: 30          # A6: lanes with fewer samples fall back to destination, then national level
+  alt_seller_recency_days: 90   # A12
+
+items:
+  - id: A1
+    title: Simulation clock
+    statement: "'Now' is a configurable AS_OF instant (default 2018-08-01 00:00). Order state is reconstructed from timestamps at or before AS_OF; later timestamps are masked."
+    impact: "The snapshot builder masks the future; lane and seller statistics use only data before AS_OF, so nothing leaks."
+  - id: A2
+    title: Display date rebasing
+    statement: "Emails can optionally shift dates so that AS_OF maps to today (run option date_rebase)."
+    impact: "Presentation only. Stored data and analytics are never shifted."
+  - id: A3
+    title: Order stages from timestamps
+    statement: "Stage = the most advanced timestamp at or before AS_OF: delivered > in_transit (carrier handover) > awaiting_pickup (approved) > pending_approval. Orders without items, and orders whose final status is canceled/unavailable, are excluded."
+    impact: "The stage decides which freight legs a disruption can hit and which mitigations are feasible. Known limitation: Olist has no cancellation timestamp, so an order canceled after AS_OF is excluded using later knowledge. Keeping them instead would inject phantom in-flight orders, most of which were canceled right after purchase. The ETL reports how many recent orders this affects (dataset meta: excluded_canceled_last_30d)."
+  - id: A4
+    title: SLA definitions
+    statement: "The customer SLA is order_estimated_delivery_date. The seller SLA is shipping_limit_date."
+    impact: "Slack, breach and days-late are computed against these dates."
+  - id: A5
+    title: Freight leg model
+    statement: "Shipments leave from the seller's city/state (first mile), travel an inter-state lane (linehaul) and are delivered in the customer's city/state (last mile, final day). There are no hubs or carriers in the data."
+    impact: "A disruption targets legs plus a geography; matching is deterministic."
+  - id: A6
+    title: Lane transit model
+    statement: "Transit time = delivered_customer - delivered_carrier, as an empirical distribution per seller_state -> customer_state, built from deliveries before AS_OF. Lanes with fewer than 30 samples fall back to the destination-state distribution, then to the national one."
+    impact: "Drives the ETA (p50/p90) and the probability of breaching the SLA."
+  - id: A7
+    title: Regional exposure of the linehaul
+    statement: "A shipment spends its first day after carrier handover inside the origin region and its last day before the last mile inside the destination region. A regional disruption only holds shipments that are inside the region while it is active; nationwide and lane-specific disruptions expose the whole inter-state journey."
+    impact: "Decides whether in-transit orders are caught: freight that already left Sao Paulo is not delayed by rain in Sao Paulo."
+  - id: A8
+    title: Backlog recovery and partial impact
+    statement: "A held shipment waits until the disruption ends (scaled by partial_impact_factor, default 1.0), and the backlog then adds ceil(0.3 x duration) days."
+    impact: "Projected delay = time stuck x partial_impact_factor + recovery days. The truckers' strike backtest reports how accuracy changes with the factor."
+  - id: A9
+    title: Billable weight
+    statement: "Billable weight = max(actual kg, L x W x H / 6000)."
+    impact: "Used for the handling profile and the freight-weight severity component."
+  - id: A10
+    title: Handling profiles
+    statement: "PARCEL (<=5 kg billable and max dimension <=60 cm), MEDIUM (<=30 kg), BULKY (>30 kg billable, any dimension >100 cm, or L+W+H >200 cm)."
+    impact: "Drives reroute feasibility and severity."
+  - id: A11
+    title: Product classes
+    statement: "A curated category->class map (PERISHABLE, ESSENTIAL, FRAGILE, HIGH_VALUE_TECH, GIFT_SEASONAL, FURNITURE_HOME, STANDARD). Products without a category get STANDARD with low confidence."
+    impact: "Mitigation rules key on class and profile; low-confidence classes are flagged for review."
+  - id: A12
+    title: Alternate sellers
+    statement: "The same product_id sold by another seller outside the disruption scope within the last 90 days is a reroute candidate. Stock is assumed to be available."
+    impact: "Enables the data-grounded REROUTE_ALT_SELLER action."
+  - id: A13
+    title: Alternate route
+    statement: "PARCEL-profile shipments can switch to an alternate carrier/air corridor (lane p50 + 1 day) at +60% freight cost, unless the disruption is nationwide or blocks all modes."
+    impact: "Enables REROUTE_ALT_ROUTE; the cost is included in the mitigation estimate."
+  - id: A14
+    title: Customer identity
+    statement: "Olist has no names or emails. Greeting names are synthetic, chosen deterministically from customer_unique_id. Approved emails are sent over SMTP to placeholder addresses on a reserved domain (a local Mailpit inbox in the demo stack)."
+    impact: "Personalization uses order facts, not identity."
+  - id: A15
+    title: Language
+    statement: "Emails default to English; pt-BR is supported as a run option."
+    impact: "Locale is passed to drafting, templates and formatting."
+  - id: A16
+    title: Company policy
+    statement: "The mitigation and compensation policy (config/policy.yaml and knowledge_base/) was authored for this system."
+    impact: "Policy-as-code: neither the LLM nor any email can exceed it (enforced by validators)."
+  - id: A17
+    title: One email per customer
+    statement: "A customer with several affected orders receives one consolidated email per run."
+    impact: "Communications are keyed by customer_unique_id."
+  - id: A18
+    title: Place-name ambiguity
+    statement: "Names that are both a state and a city (Sao Paulo, Rio de Janeiro) are resolved by qualifiers ('state of', 'city of'); otherwise they default to the state and are flagged so the user can switch."
+    impact: "The interpretation step exposes the ambiguity with preview counts per option."
+  - id: A19
+    title: Corpus
+    statement: "The 10,000 most recent non-canceled orders purchased at or before AS_OF are loaded and indexed. Only non-delivered ones are actionable."
+    impact: "Bounded index size and reproducible runs."

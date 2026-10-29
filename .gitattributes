@@ -1,0 +1,5 @@
+# Force LF everywhere so files mounted/copied into Linux containers behave identically on Windows, macOS and Linux.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary

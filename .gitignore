@@ -1,0 +1,33 @@
+# The company's assignment brief stays private
+*.pdf
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Generated UI check screenshots
+e2e/out/
+
+# Data (downloaded from Kaggle on first start; never committed)
+data/raw/
+data/processed/
+data/.kagglehub/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+dist/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
