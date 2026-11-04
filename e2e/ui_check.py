@@ -4,7 +4,7 @@
         mcr.microsoft.com/playwright/python:v1.48.0-jammy \
         sh -c "pip install -q playwright==1.48.0 && python /ui_check.py http://web:8080 http://mailpit:8025"
 
-Journey: sign up (lands as analyst) -> sign in as analyst -> scenario -> interpret (offline) -> ambiguity switch -> run -> every tab -> order drawer
+Journey: sign up (lands as analyst) -> sign in as analyst -> scenario -> interpret (offline) -> ambiguity switch -> run -> every tab (incl. Outreach) -> order drawer
 -> emails (approve is disabled for an analyst) -> explorer -> about -> sign in as approver -> approve & send one email
 -> it reaches the Mailpit inbox -> sign in as admin -> promote the new account to approver -> phone width. Writes screenshots to /out and prints console errors, failed requests
 and mobile overflow. Exits non-zero if any check fails.
@@ -67,12 +67,23 @@ with sync_playwright() as p:
 
     sign_in(page, "analyst@example.com")
     checks["analyst_has_no_users_page"] = page.get_by_role("link", name="Users").count() == 0
+    checks["ai_all_emails_option"] = page.get_by_label("AI-write every email", exact=False).count() == 1
     shot(page, "01_scenario_empty")
 
-    # Offline interpretation keeps the LLM quota untouched.
+    # Keep the LLM quota untouched: switch the LLM off for the interpretation and the run. The checkbox only becomes
+    # usable once the page has loaded the server's LLM status, so wait for that (an offline stack leaves it disabled).
+    # (The site's Content-Security-Policy forbids eval, so page.wait_for_function with a string cannot be used here.)
     llm_box = page.get_by_label("Use the LLM", exact=False)
-    if llm_box.count() and llm_box.is_checked():
-        llm_box.uncheck()
+
+    def llm_off():
+        for _ in range(40):  # up to 20 s for the server's LLM status; an offline stack leaves the box disabled
+            if llm_box.count() and llm_box.is_enabled():
+                break
+            page.wait_for_timeout(500)
+        if llm_box.count() and llm_box.is_enabled() and llm_box.is_checked():
+            llm_box.uncheck()
+
+    llm_off()
     page.get_by_role("button", name="Interpret").click()
     page.get_by_text("2. Check the interpretation").wait_for(timeout=120_000)
     page.wait_for_timeout(1500)
@@ -86,11 +97,13 @@ with sync_playwright() as p:
         page.get_by_label("state (SP)", exact=False).first.check()
         page.wait_for_timeout(2500)
 
+    llm_off()  # the server's LLM status can arrive late and re-enable the box: make sure it is off for the run itself
     page.get_by_role("button", name="Run impact analysis").click()
     page.wait_for_url("**/runs/*", timeout=60_000)
     run_url = page.url
     page.get_by_role("tab", name="Impact summary").wait_for(timeout=240_000)
     page.wait_for_timeout(2500)
+    checks["run_was_offline"] = page.get_by_text("LLM offline").count() >= 1
     shot(page, "04_run_overview")
 
     page.get_by_role("tab", name="Orders & decisions").click()
@@ -106,10 +119,25 @@ with sync_playwright() as p:
     page.wait_for_timeout(2000)
     checks["analyst_cannot_approve"] = page.get_by_role("button", name="Approve & send", exact=True).is_disabled()
     shot(page, "07_emails_analyst")
-    for tab, name in (("Retrieval evidence", "08_evidence"), ("Run details", "09_details")):
-        page.get_by_role("tab", name=tab).click()
-        page.wait_for_timeout(2000)
-        shot(page, name)
+    checks["write_all_with_ai_button"] = page.get_by_role("button", name="with AI", exact=False).count() >= 1
+    checks["timeline_has_outreach_stage"] = page.get_by_text("Call briefs for care, notices for sellers").count() == 1
+
+    # Outreach: call briefs for critical customers and notices for the most exposed sellers (drafts, never sent).
+    page.get_by_role("tab", name="Outreach").click()
+    page.get_by_text("Care-team call briefs").wait_for(timeout=30_000)
+    checks["outreach_cards"] = page.get_by_role("button", name="Copy text").count()
+    checks["outreach_has_seller_notices"] = page.get_by_role("heading", name="Seller notices", exact=False).count() >= 1
+    checks["outreach_fact_check_shown"] = page.get_by_text("Fact check passed").count() >= 1
+    shot(page, "07b_outreach")
+    page.get_by_role("tab", name="Retrieval evidence").click()
+    page.wait_for_timeout(2500)
+    # Retrieval: similar orders the exact filters left out are listed for review, with the reason for each.
+    checks["evidence_near_misses"] = page.get_by_text("Similar orders outside the exact scope").count() >= 1
+    checks["evidence_near_miss_rows"] = page.locator('[data-testid="near-misses"] tbody tr').count()
+    shot(page, "08_evidence")
+    page.get_by_role("tab", name="Run details").click()
+    page.wait_for_timeout(2000)
+    shot(page, "09_details")
 
     page.goto(f"{BASE}/runs", wait_until="networkidle")
     shot(page, "10_runs")
@@ -171,5 +199,10 @@ print(json.dumps(result, indent=1))
 ok = (checks.get("analyst_cannot_approve") is True and checks.get("approved_email_sent") is True
       and (checks.get("mailpit_messages") or 0) >= 1
       and checks.get("signup_role") is True and checks.get("analyst_has_no_users_page") is True
-      and checks.get("promoted_role") == "approver")
+      and checks.get("promoted_role") == "approver"
+      and checks.get("run_was_offline") is True
+      and checks.get("evidence_near_misses") is True and (checks.get("evidence_near_miss_rows") or 0) >= 1
+      and checks.get("ai_all_emails_option") is True and checks.get("write_all_with_ai_button") is True
+      and checks.get("timeline_has_outreach_stage") is True and (checks.get("outreach_cards") or 0) >= 1
+      and checks.get("outreach_has_seller_notices") is True and checks.get("outreach_fact_check_shown") is True)
 sys.exit(1 if console_errors or failed_requests or any(v > 0 for v in overflow.values()) or not ok else 0)

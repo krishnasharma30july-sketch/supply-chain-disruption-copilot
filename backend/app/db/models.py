@@ -295,6 +295,27 @@ class RunSummary(Base):
     generator: Mapped[str] = mapped_column(String(10))
 
 
+class OutreachItem(Base):
+    """Drafts for people rather than customers: care-team call briefs and notices to sellers (never sent automatically)."""
+
+    __tablename__ = "outreach_items"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    run_id: Mapped[str] = mapped_column(String(36), ForeignKey("runs.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(16))  # call_brief | seller_notice
+    ref: Mapped[str] = mapped_column(String(32))  # customer_ref or seller_ref (8 characters)
+    title: Mapped[str] = mapped_column(String(200))
+    subject: Mapped[str | None] = mapped_column(String(200))
+    body: Mapped[str] = mapped_column(Text)
+    data: Mapped[dict] = mapped_column(JSONB, default=dict)  # structured fields and the facts the text was grounded on
+    generator: Mapped[str] = mapped_column(String(10))  # llm | template
+    model: Mapped[str | None] = mapped_column(String(64))
+    prompt_version: Mapped[str | None] = mapped_column(String(32))
+    qa: Mapped[dict] = mapped_column(JSONB, default=dict)
+    priority: Mapped[float] = mapped_column(Float, default=0.0)  # severity (briefs) or affected orders (notices)
+    status: Mapped[str] = mapped_column(String(20), default="draft")  # draft | qa_failed
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class LlmCall(Base):
     __tablename__ = "llm_calls"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)

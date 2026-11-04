@@ -112,7 +112,7 @@ export default function OrdersTab({ runId }: { runId: string }) {
                       <th>Promised</th>
                       <th>New ETA</th>
                       <th className="text-right">Late</th>
-                      <th className="text-right">P(miss)</th>
+                      <th className="text-right" title="Chance of missing the promised date if the disruption unfolds exactly as described. A scenario estimate, not a forecast.">P(miss)</th>
                       <th>Severity</th>
                       <th>Action</th>
                       <th className="text-right">Value</th>

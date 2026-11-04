@@ -151,6 +151,45 @@ services:
     profiles: ["observability"]
     restart: unless-stopped
 
+
+  # Optional self-hosted last-resort LLM: docker compose --profile local-llm up -d  (needs an NVIDIA GPU, ~5 GB of VRAM,
+  # Docker Desktop's WSL2 GPU support on Windows or the NVIDIA container toolkit on Linux), then set LOCAL_LLM_ENABLED=true
+  # in .env. Qwen3-4B in 4-bit AWQ (~2.6 GB) leaves the rest of a 6 GB card for the KV cache. vLLM manages that cache with
+  # PagedAttention (fixed-size blocks, so no memory is wasted on padding), reuses shared prompt prefixes (prefix caching)
+  # and batches concurrent requests continuously. The model downloads once into the hfcache volume.
+  vllm:
+    image: vllm/vllm-openai:v0.10.2
+    command:
+      - --model=Qwen/Qwen3-4B-AWQ
+      - --served-model-name=qwen3-4b
+      - --dtype=half                  # AWQ kernels run in fp16
+      - --max-model-len=8192          # prompt + reply; 8k tokens of KV cache is about 1.2 GB for this model
+      - --gpu-memory-utilization=${VLLM_GPU_UTIL:-0.80}
+      - --max-num-seqs=8              # concurrent sequences sharing the paged KV cache
+      - --kv-cache-dtype=${VLLM_KV_DTYPE:-auto}  # "fp8" roughly doubles the cached tokens if your GPU/driver supports it
+      - --block-size=16               # PagedAttention block: tokens per KV page
+      - --enable-prefix-caching       # the system prompts and fact sheets repeat across calls
+      - --enable-chunked-prefill      # long prompts do not stall running decodes
+    ipc: host
+    volumes:
+      - hfcache:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 120s
+    profiles: ["local-llm"]
+    restart: unless-stopped
+
 volumes:
   pgdata:
   appdata:
+  hfcache:

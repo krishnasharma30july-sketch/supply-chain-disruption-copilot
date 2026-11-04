@@ -59,8 +59,23 @@ class Settings(BaseSettings):
     rerank_enabled: bool = True
     rerank_depth: int = Field(default=30, ge=5, le=200)  # fused candidates re-scored by the cross-encoder
 
-    llm_provider: Literal["gemini", "offline"] = "gemini"
+    # Primary provider. The other one (when its key is set) is tried after the primary's models fail or run out of quota.
+    llm_provider: Literal["gemini", "groq", "local", "offline"] = "gemini"
     gemini_api_key: str | None = None
+    groq_api_key: str | None = None
+    groq_base_url: str = "https://api.groq.com/openai/v1"
+    # Groq models in preference order (OpenAI-compatible chat API, JSON mode). Each model has its own limits.
+    groq_models: list[str] = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
+    groq_rpm: int = Field(default=25, ge=1)
+    # Self-hosted last resort: Qwen3-4B (4-bit AWQ) served by vLLM (PagedAttention, KV cache, prefix caching, continuous
+    # batching) from the optional `local-llm` compose profile. No API key. It is tried only after every API model failed.
+    local_llm_enabled: bool = False
+    local_llm_base_url: str = "http://vllm:8000/v1"
+    local_llm_model: str = "qwen3-4b"  # the --served-model-name of the vLLM container
+    local_llm_api_key: str = "local"
+    local_llm_rpm: int = Field(default=600, ge=1)
+    local_llm_timeout_s: float = Field(default=180, gt=0)  # a 6 GB GPU generates ~30 tokens/s, so replies take a while
+    local_llm_max_output_tokens: int = Field(default=3072, ge=256, le=8192)  # prompt + reply must fit the 8k context
     llm_model_default: str = "gemini-3.5-flash"
     llm_model_intake: str | None = None
     llm_model_email: str | None = None
@@ -76,22 +91,59 @@ class Settings(BaseSettings):
     llm_breaker_threshold: int = Field(default=3, ge=1)
     llm_breaker_cooldown_s: float = Field(default=120, gt=0)  # an open breaker retries after this long
 
-    max_llm_emails: int = Field(default=25, ge=0, le=500)
+    max_llm_emails: int = Field(default=25, ge=0, le=500)  # written by the LLM inside the run (the rest follow below)
     max_bulk_drafts: int = Field(default=10, ge=1, le=200)  # per "Draft with AI" request (protects the daily quota)
     email_batch_size: int = Field(default=5, ge=1, le=10)
     max_adjudications: int = Field(default=20, ge=0, le=200)
-    # Most severe flagged cases investigated by the tool-using agent (several LLM calls each; 0 disables).
-    max_agent_cases: int = Field(default=2, ge=0, le=20)
+    # Most severe flagged cases investigated by the tool-using agent (up to agent_max_steps LLM calls each; 0 disables).
+    max_agent_cases: int = Field(default=6, ge=0, le=20)
     agent_max_steps: int = Field(default=3, ge=2, le=6)
     adjudication_batch_size: int = Field(default=8, ge=1, le=20)
 
+    # AI coverage for every customer: after the run, template emails are upgraded to LLM drafts in the background
+    # (severity order, fact-checked, never touching approved/edited emails) until this many LLM calls are spent.
+    ai_emails_for_everyone: bool = True
+    email_upgrade_max_calls: int = Field(default=150, ge=0, le=5000)
+    email_upgrade_chunk_batches: int = Field(default=6, ge=1, le=50)  # batches per worker job, so runs can interleave
+    # Tone and empathy review of AI-written emails (advisory: it never blocks an email, weak drafts get one rewrite).
+    tone_review_enabled: bool = True
+    tone_batch_size: int = Field(default=8, ge=1, le=20)
+    tone_min_score: int = Field(default=4, ge=1, le=5)  # a draft scoring below this on warmth or clarity is rewritten once
+    # "Most exposed impacted sellers" evidence: share of the order that comes from exact exposure (affected orders and value)
+    # against search relevance. 0 = search only.
+    evidence_exposure_weight: float = Field(default=0.95, ge=0, le=1)
+    # Outreach drafts for people: call briefs for the care team and notices for the most exposed sellers.
+    max_call_briefs: int = Field(default=10, ge=0, le=100)
+    max_seller_notices: int = Field(default=5, ge=0, le=50)
+
     @property
     def llm_enabled(self) -> bool:
-        return self.llm_provider == "gemini" and bool(self.gemini_api_key)
+        return self.llm_provider != "offline" and bool(
+            self.gemini_api_key or self.groq_api_key or self.local_llm_enabled
+        )
 
     def model_for(self, role: str) -> str:
         value = getattr(self, f"llm_model_{role}", None)
         return value or self.llm_model_default
+
+    def llm_chain(self, role: str) -> list[tuple[str, str]]:
+        """(provider, model) pairs in the order they are tried. A provider without a key is left out; the local model is always last."""
+        by_provider = {
+            "gemini": [("gemini", m) for m in [self.model_for(role), *self.llm_fallback_models]] if self.gemini_api_key else [],
+            "groq": [("groq", m) for m in self.groq_models] if self.groq_api_key else [],
+            "local": [("local", self.local_llm_model)] if self.local_llm_enabled else [],
+        }
+        # The primary provider first, then the others in a fixed order.
+        order = [self.llm_provider] if self.llm_provider in by_provider else []
+        order += [p for p in ("gemini", "groq", "local") if p not in order]
+        ordered = [pair for p in order for pair in by_provider[p]]
+        seen: set[tuple[str, str]] = set()
+        out: list[tuple[str, str]] = []
+        for pair in ordered:
+            if pair[1] and pair not in seen:
+                seen.add(pair)
+                out.append(pair)
+        return out
 
 
 @lru_cache

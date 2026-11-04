@@ -8,7 +8,6 @@ through the same policy code as the batch adjudicator. Every step is kept in the
 from __future__ import annotations
 
 import json
-import re
 from dataclasses import dataclass, field
 
 from app.domain.models import MitigationDecision, OrderImpact
@@ -18,9 +17,9 @@ from app.services.comms import order_ref
 from app.services.formatting import pretty_category
 from app.services.policy_engine import PolicyContext, delay_all
 from app.services.retrieval.kb import KbChunk
+from app.services.retrieval.policy_rag import PolicySearch, keyword_sections
 
 MAX_RESULT_CHARS = 1500
-_WORD = re.compile(r"[a-z]{3,}")
 
 
 def _d(v) -> str:
@@ -34,12 +33,25 @@ class CaseTools:
     pc: PolicyContext
     kb: list[KbChunk]
     customer_impacts: list[OrderImpact] = field(default_factory=list)
+    policy_search: PolicySearch | None = None  # hybrid search over the policy documents (the retrieval step)
 
     def run(self, tool: str, argument: str) -> dict:
         fn = getattr(self, f"tool_{tool}", None)
         if fn is None:
             return {"error": f"unknown tool {tool!r}"}
         return fn(argument)
+
+    async def arun(self, tool: str, argument: str) -> dict:
+        """Like run(), but the policy tool retrieves with hybrid search when a search function is available."""
+        if tool == "policy" and self.policy_search is not None:
+            try:
+                sections = await self.policy_search(argument or "delay")
+            except Exception:  # retrieval must never break an investigation: the keyword fallback answers
+                sections = []
+            if sections:
+                return {"retrieval": sections[0].via,
+                        "sections": [{"id": s.id, "heading": s.heading, "text": s.text[:600]} for s in sections]}
+        return self.run(tool, argument)
 
     def tool_delivery_forecast(self, _: str) -> dict:
         i = self.imp
@@ -83,12 +95,8 @@ class CaseTools:
         ]}
 
     def tool_policy(self, argument: str) -> dict:
-        q = set(_WORD.findall(argument.lower())) or {"delay"}
-        scored = sorted(
-            ((len(q & set(_WORD.findall(f"{c.heading} {c.text}".lower()))), c) for c in self.kb), key=lambda t: -t[0]
-        )
-        hits = [c for s, c in scored[:2] if s > 0]
-        return {"sections": [{"id": c.chunk_id, "heading": c.heading, "text": c.text[:600]} for c in hits]
+        hits = keyword_sections(self.kb, argument, 2)
+        return {"retrieval": "keyword", "sections": [{"id": s.id, "heading": s.heading, "text": s.text[:600]} for s in hits]
                 or "No policy section matched."}
 
 
@@ -137,7 +145,7 @@ async def investigate(
             continue
         transcript_lines.append(f"Step {step} thought: {entry['thought']}")
         for c in calls:
-            result = tools.run(c.tool, c.argument)
+            result = await tools.arun(c.tool, c.argument)
             text = _clip(result)
             entry["tools"].append({"tool": c.tool, "argument": c.argument[:80], "result": text[:400]})
             transcript_lines.append(f"- {c.tool}({c.argument!r}) -> {text}")

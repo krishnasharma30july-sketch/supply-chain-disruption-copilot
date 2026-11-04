@@ -30,6 +30,10 @@ async def meta(request: Request, session: AsyncSession = Depends(get_session)) -
             "breaker_reason": llm.breaker_reason,
             "fallback_models": s.llm_fallback_models if llm.enabled else [],
             "exhausted_models": llm.exhausted_models(),
+            # Order in which provider/model pairs are tried; a provider whose key was rejected is listed as disabled.
+            "chain": [{"provider": p, "model": m} for p, m in s.llm_chain("email")] if llm.enabled else [],
+            "disabled_providers": llm.disabled_providers(),
+            "ai_emails_for_everyone": s.ai_emails_for_everyone,
         },
         "versions": {
             "policy": get_policy().version, "scoring": get_scoring().version, "assumptions": get_assumptions().version,

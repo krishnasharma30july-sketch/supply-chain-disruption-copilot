@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from datetime import timedelta
 
 from arq import cron
 from arq.connections import RedisSettings
@@ -12,12 +13,14 @@ from sqlalchemy import select
 
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
-from app.db.models import Communication
+from app.db.models import Communication, Run
 from app.db.session import get_sessionmaker, init_db
+from app.domain.models import RunOptions
 from app.llm.service import LLMCallError, LLMService, LLMUnavailable
 from app.orchestrator.liveness import queued_run_ids, reap_stale_runs
 from app.orchestrator.pipeline import execute_run_safely
 from app.services.comm_ops import regenerate_with_llm
+from app.services.email_upgrade import upgrade_chunk
 
 log = get_logger(__name__)
 
@@ -46,7 +49,41 @@ async def startup(ctx: dict) -> None:
 
 
 async def run_pipeline_job(ctx: dict, run_id: str) -> str:
-    return await execute_run_safely(run_id, ctx["llm"], ctx.get("embedder"))
+    status = await execute_run_safely(run_id, ctx["llm"], ctx.get("embedder"))
+    if status == "succeeded":
+        try:
+            await _schedule_upgrade(ctx, run_id)
+        except Exception:  # extra AI coverage must never turn a finished run into a failure
+            log.exception("email_upgrade_schedule_failed", run_id=run_id)
+    return status
+
+
+async def _schedule_upgrade(ctx: dict, run_id: str) -> bool:
+    """After a successful run, queue the background job that writes the remaining emails with the LLM."""
+    settings, llm = get_settings(), ctx["llm"]
+    async with get_sessionmaker()() as s:
+        run = await s.get(Run, run_id)
+        if run is None:
+            return False
+        opts = RunOptions.model_validate(run.options or {})
+        wanted = opts.ai_all_emails if opts.ai_all_emails is not None else settings.ai_emails_for_everyone
+        explicitly_off = opts.max_llm_emails == 0  # the analyst asked for no AI-written emails
+        if not (wanted and opts.use_llm and llm.enabled and not explicitly_off and settings.email_upgrade_max_calls > 0):
+            return False
+        run.metrics = {**(run.metrics or {}), "ai_upgrade": {"state": "queued", "upgraded": 0, "failed": 0, "calls": 0}}
+        await s.commit()
+    await ctx["redis"].enqueue_job(
+        "upgrade_emails_job", run_id, False, _job_id=f"upgrade:{run_id}:{uuid.uuid4().hex[:8]}", _defer_by=timedelta(seconds=3)
+    )
+    return True
+
+
+async def upgrade_emails_job(ctx: dict, run_id: str, reset: bool = False) -> dict:
+    """One slice of the background AI upgrade. It re-queues itself while work remains, so other jobs interleave."""
+    progress = await upgrade_chunk(get_sessionmaker(), ctx["llm"], get_settings(), run_id, reset=reset)
+    if progress.get("state") == "running":
+        await ctx["redis"].enqueue_job("upgrade_emails_job", run_id, False, _job_id=f"upgrade:{run_id}:{uuid.uuid4().hex[:8]}")
+    return progress
 
 
 async def reap_stale_runs_job(ctx: dict) -> int:
@@ -76,7 +113,7 @@ async def draft_emails_job(ctx: dict, run_id: str, comm_ids: list[str]) -> dict:
 
 
 class WorkerSettings:
-    functions = [run_pipeline_job, draft_emails_job]
+    functions = [run_pipeline_job, draft_emails_job, upgrade_emails_job]
     cron_jobs = [cron(reap_stale_runs_job, second=0, run_at_startup=False)]  # every minute
     on_startup = startup
     redis_settings = RedisSettings.from_dsn(get_settings().redis_url)

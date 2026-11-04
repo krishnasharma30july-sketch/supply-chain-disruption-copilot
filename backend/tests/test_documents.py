@@ -28,3 +28,19 @@ def test_product_and_seller_documents_put_tags_second():
     assert product_document(product, 2)["content"].split("\n")[1].startswith("Tags:")
     seller = {"seller_id": "s" * 32, "city_norm": "sao paulo", "state": "SP"}
     assert seller_document(seller, None, ["furniture_decor"], ["FURNITURE_HOME"], 3)["content"].split("\n")[1].startswith("Tags:")
+
+
+def test_seller_document_says_where_the_parcels_go():
+    from app.etl.documents import destinations_line
+
+    seller = {"seller_id": "abcdef12", "city_norm": "campinas", "state": "SP"}
+    doc = seller_document(seller, None, ["furniture_decor"], ["FURNITURE_HOME"], 3,
+                          ship_active={"RJ": 3, "SP": 1}, ship_all={"RJ": 5, "SP": 4, "MG": 1})
+    lines = doc["content"].split("\n")
+    assert lines[1].startswith("Tags:")  # tags stay on line 2 (the retrieval ranking relies on it)
+    assert "Parcels in the pipeline now go to: Rio de Janeiro (RJ) 75%, Sao Paulo (SP) 25%" in doc["content"]
+    assert "Overall ships to: Rio de Janeiro (RJ) 50%, Sao Paulo (SP) 40%, Minas Gerais (MG) 10%" in doc["content"]
+    # a seller with no destination history keeps the old layout (no empty lines)
+    plain = seller_document(seller, None, [], [], 0)["content"]
+    assert "ships to" not in plain and "" not in plain.split("\n")
+    assert destinations_line("x", {}) is None

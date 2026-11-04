@@ -14,8 +14,10 @@ export default function EvidenceTab({ runId }: { runId: string }) {
           Scope is decided by <strong>exact structured filters</strong> (states, cities, radius, stage), because a vector search
           cannot guarantee recall on geography. Retrieval handles what is fuzzy: product terms are resolved to categories with
           lexical, keyword and semantic matching, and <strong>hybrid search</strong> (pgvector dense + Postgres full-text, fused
-          with Reciprocal Rank Fusion) ranks impacted orders, heavy or bulky SKUs, exposed sellers and the policy sections
-          the agents cite. Mode for this run: <Badge>{r.mode ?? "n/a"}</Badge>
+          with Reciprocal Rank Fusion, then re-ranked) ranks impacted orders, heavy or bulky SKUs, exposed sellers and policy
+          sections. Retrieved policy text also reaches the AI: the investigator&apos;s policy tool and the adjudicator&apos;s context
+          are filled by this search, and the summary may cite the sections it was offered. Search never decides who is impacted
+          or what they are owed. Mode for this run: <Badge>{r.mode ?? "n/a"}</Badge>
         </p>
       </Card>
 
@@ -27,6 +29,36 @@ export default function EvidenceTab({ runId }: { runId: string }) {
             of the impacted orders (precision {Math.round((r.scope_check.precision ?? 0) * 100)}%). This is why the scope
             is decided by exact structured filters, while retrieval resolves concepts, ranks evidence and cites policy.
           </p>
+        </Card>
+      )}
+
+      {r.scope_check?.near_misses && r.scope_check.near_misses.length > 0 && (
+        <Card
+          title="Similar orders outside the exact scope (for review)"
+          actions={<Badge>{r.scope_check.near_miss_total} found by search</Badge>}
+        >
+          <p className="mb-2 text-xs text-slate-500">
+            Search ranked these orders as similar to the scenario, but the structured filters did not select them. They are shown so
+            an analyst can spot a gap in the interpretation (for example a missing region). They are never added to the scope
+            automatically.
+          </p>
+          <table className="w-full text-sm" data-testid="near-misses">
+            <thead className="text-left text-xs uppercase text-slate-500">
+              <tr><th className="py-1">Order</th><th>Why the filters left it out</th><th className="text-right">Search rank</th></tr>
+            </thead>
+            <tbody>
+              {r.scope_check.near_misses.map((m) => (
+                <tr key={m.order_ref} className="border-t border-slate-100 align-top">
+                  <td className="py-1.5">
+                    <p className="font-medium">{m.title}</p>
+                    <p className="line-clamp-1 text-xs text-slate-500">{m.snippet}</p>
+                  </td>
+                  <td className="pr-3 text-slate-700">{m.reason}</td>
+                  <td className="text-right tabular-nums">{m.rank}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </Card>
       )}
 
@@ -68,6 +100,11 @@ export default function EvidenceTab({ runId }: { runId: string }) {
                     <td className="py-1.5">
                       <p className="font-medium">{h.title}</p>
                       <p className="line-clamp-2 text-xs text-slate-500">{h.snippet}</p>
+                      {h.exposure && (
+                        <p className="text-xs font-medium text-amber-700">
+                          {h.exposure.orders} affected order{h.exposure.orders === 1 ? "" : "s"} · R$ {h.exposure.value_brl.toLocaleString("en-US", { minimumFractionDigits: 2 })} · ranked by exposure and search relevance
+                        </p>
+                      )}
                     </td>
                     <td className="text-right tabular-nums">{h.rerank_score != null ? h.rerank_score.toFixed(2) : "-"}</td>
                     <td className="text-right tabular-nums">{h.score.toFixed(4)}</td>

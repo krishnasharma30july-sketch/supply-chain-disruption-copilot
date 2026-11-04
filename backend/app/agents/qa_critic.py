@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import uuid
+from statistics import mean
 
 from sqlalchemy import insert
 
 from app.agents.base import AgentContext, EmailDraft, RunState
-from app.agents.customer_success import CustomerSuccessAgent
+from app.agents.customer_success import CustomerSuccessAgent, tone_guide
 from app.db.models import Communication
 from app.services.comms import render
 from app.services.qa import check_email
+from app.services.tone import ToneItem, review_tone
 
 MAX_REDRAFT_ROUNDS = 2
 
@@ -27,6 +29,84 @@ class QACriticAgent:
         d.qa = report.model_dump()
         d.qa["generator"] = d.generator
         return report.passed
+
+    async def _tone_review(self, drafts: list[EmailDraft], ctx: AgentContext) -> dict | None:
+        """Advisory second pass on AI-written emails that passed the fact check: rate warmth and clarity, send weak
+        drafts back once, and keep a rewrite only if it scores higher and still passes the fact check."""
+        s = ctx.settings
+        if not (s.tone_review_enabled and ctx.use_llm and ctx.llm.available):
+            return None
+        cand = [d for d in drafts if d.generator == "llm" and d.qa.get("passed")]
+        if not cand:
+            return None
+        guide = tone_guide(ctx)
+
+        def items(ds: list[EmailDraft]) -> list[ToneItem]:
+            return [ToneItem(d.facts.customer_ref, d.facts.locale, d.subject, d.body) for d in ds]
+
+        verdicts = await review_tone(ctx.llm, items(cand), guide=guide, batch_size=s.tone_batch_size, run_id=ctx.run_id)
+        if not verdicts:
+            return None  # reviewer unavailable: the step is skipped, nothing is blocked
+        for d in cand:
+            if (v := verdicts.get(d.facts.customer_ref)) is not None:
+                d.qa["tone"] = {**v.as_dict(), "rewritten": False}
+        weak = [d for d in cand if (v := verdicts.get(d.facts.customer_ref)) is not None and v.is_weak(s.tone_min_score)]
+
+        kept = 0
+        if weak and ctx.llm.available:
+            snap = {
+                d.customer_unique_id: (d.subject, d.body, d.model, d.prompt_version, d.attempts, dict(d.qa), list(d.llm_feedback))
+                for d in weak
+            }
+
+            def restore(d: EmailDraft) -> None:
+                d.subject, d.body, d.model, d.prompt_version, d.attempts, d.qa, d.llm_feedback = snap[d.customer_unique_id]
+
+            feedback = {d.customer_unique_id: [f"Tone review: {verdicts[d.facts.customer_ref].notes}"] for d in weak}
+            await ctx.emitter.emit(
+                self.name, "info",
+                f"Tone review: {_emails(len(weak), 'AI-written email')} scored below {s.tone_min_score}/5 on warmth or clarity "
+                "and went back to the writer once.",
+            )
+            await self.writer.write_llm(weak, ctx, feedback)
+            rewritten = []
+            for d in weak:
+                old = snap[d.customer_unique_id]
+                if (d.subject, d.body) == (old[0], old[1]):
+                    restore(d)  # the rewrite did not happen (LLM unavailable or no output)
+                elif self._check(d):
+                    rewritten.append(d)
+                else:
+                    restore(d)  # a rewrite that breaks the fact check is never used
+            second = (
+                await review_tone(ctx.llm, items(rewritten), guide=guide, batch_size=s.tone_batch_size, run_id=ctx.run_id)
+                if rewritten else {}
+            )
+            for d in rewritten:
+                old_v, new_v = verdicts[d.facts.customer_ref], second.get(d.facts.customer_ref)
+                if new_v is not None and new_v.score > old_v.score:
+                    d.qa["tone"] = {**new_v.as_dict(), "rewritten": True,
+                                    "before": {"warmth": old_v.warmth, "clarity": old_v.clarity}}
+                    kept += 1
+                else:
+                    restore(d)  # no evidence that it reads better: keep the original
+
+        rated = [verdicts[d.facts.customer_ref] for d in cand if d.facts.customer_ref in verdicts]
+        summary = {
+            "reviewed": len(rated),
+            "avg_warmth": round(mean(v.warmth for v in rated), 2),
+            "avg_clarity": round(mean(v.clarity for v in rated), 2),
+            "weak": len(weak),
+            "rewrites_kept": kept,
+        }
+        await ctx.emitter.emit(
+            self.name, "info",
+            f"Tone review: {_emails(len(rated), 'AI-written email')} rated, average warmth {summary['avg_warmth']:.1f}/5 and "
+            f"clarity {summary['avg_clarity']:.1f}/5."
+            + (f" {kept} of {len(weak)} rewrites read better and were kept." if weak else " None needed a rewrite."),
+            summary,
+        )
+        return summary
 
     async def run(self, state: RunState, ctx: AgentContext) -> None:
         drafts = state.drafts
@@ -57,6 +137,7 @@ class QACriticAgent:
             self._check(d)
         for d in drafts:
             d.status = "draft" if d.qa.get("passed") else "qa_failed"
+        tone = await self._tone_review(drafts, ctx)
 
         if ctx.session_factory is not None and drafts:
             rows = [
@@ -93,6 +174,8 @@ class QACriticAgent:
             "llm_initial_failures": initial_fail,
             "template_fallbacks": fell_back,
         }
+        if tone:
+            state.metrics["communications"]["tone"] = tone
 
 
 def _emails(n: int, noun: str = "email") -> str:

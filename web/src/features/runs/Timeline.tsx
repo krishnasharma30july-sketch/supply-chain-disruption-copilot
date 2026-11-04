@@ -8,7 +8,8 @@ const STAGES = [
   { id: "analyst", name: "Logistics Analyst", role: "ETA, breach probability, severity" },
   { id: "mitigation", name: "Mitigation", role: "Policy rules + bounded LLM adjudication" },
   { id: "customer_success", name: "Customer Success", role: "Grounded, personalised emails" },
-  { id: "qa_critic", name: "QA Critic", role: "Fact, policy and tone checks; redrafts" },
+  { id: "qa_critic", name: "QA Critic", role: "Fact and policy checks, tone review, redrafts" },
+  { id: "outreach", name: "Outreach", role: "Call briefs for care, notices for sellers" },
   { id: "reporter", name: "Reporter", role: "Stats, recommendations, narrative" },
 ];
 

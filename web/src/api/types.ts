@@ -57,7 +57,31 @@ export interface ParseResponse {
   option_previews: OptionPreview[];
 }
 
-export interface RunOptions { locale: "en" | "pt-BR"; max_llm_emails: number | null; date_rebase: boolean; use_llm: boolean }
+export interface RunOptions {
+  locale: "en" | "pt-BR";
+  max_llm_emails: number | null;
+  date_rebase: boolean;
+  use_llm: boolean;
+  ai_all_emails: boolean | null;
+}
+
+/** Progress of the background job that writes the remaining template emails with the LLM (stored in run.metrics). */
+export interface AiUpgrade {
+  state: "queued" | "running" | "done" | "stopped";
+  upgraded: number;
+  failed: number;
+  calls: number;
+  remaining?: number | null;
+  reason?: string | null;
+}
+
+export interface ToneScore {
+  warmth: number;
+  clarity: number;
+  notes: string;
+  rewritten: boolean;
+  before?: { warmth: number; clarity: number };
+}
 
 export type RunStatus = "queued" | "running" | "succeeded" | "failed" | "canceled";
 
@@ -133,7 +157,7 @@ export interface Communication {
   model: string | null;
   prompt_version: string | null;
   status: "draft" | "qa_failed" | "approved" | "sent" | "rejected";
-  qa: { passed?: boolean; checks?: QACheck[]; generator?: string };
+  qa: { passed?: boolean; checks?: QACheck[]; generator?: string; tone?: ToneScore; ai_upgrade?: string };
   max_severity: number;
   version: number;
   attempts: number;
@@ -264,6 +288,8 @@ export interface RetrievalHit {
   dense_rank: number | null;
   sparse_rank: number | null;
   rerank_score?: number | null;
+  exposure?: { orders: number; items: number; value_brl: number } | null;
+  blend?: number;
 }
 
 export interface Summary {
@@ -272,7 +298,19 @@ export interface Summary {
   retrieval: {
     concepts?: { term: string; matches: { kind: string; value: string; label: string; score: number; via: string }[] }[];
     queries?: { purpose: string; query: string; doc_types: string[]; restricted_to_scope: boolean; hits: RetrievalHit[] }[];
-    scope_check?: { n: number; retrieved?: number; verified?: number; recall: number | null; precision: number | null };
+    scope_check?: {
+      n: number;
+      retrieved?: number;
+      verified?: number;
+      recall: number | null;
+      precision: number | null;
+      near_miss_total?: number;
+      near_misses?: { order_ref: string; rank: number; title: string; snippet: string; reason: string }[];
+    };
+    /** Policy sections the summary relied on (cited by the AI, and only ever ids that search offered). */
+    narrative_sources?: { id: string; title: string }[];
+    /** Everything search offered the summary as named sources. */
+    offered_sources?: { policy: { id: string; title: string }[]; bulky_categories: string[] };
     mode?: string;
   };
   headline: string;
@@ -284,6 +322,25 @@ export interface Summary {
 
 export interface SearchHit extends RetrievalHit { doc_id: string; metadata: Record<string, any> }
 export interface SearchResponse { query: string; mode: string; effective_mode: string; hits: SearchHit[] }
+
+/** A draft for people (care-team call brief or seller notice). Never sent automatically. */
+export interface OutreachItem {
+  id: string;
+  run_id: string;
+  kind: "call_brief" | "seller_notice";
+  ref: string;
+  title: string;
+  subject: string | null;
+  body: string;
+  data: Record<string, any>;
+  generator: "llm" | "template";
+  model: string | null;
+  prompt_version: string | null;
+  qa: { passed?: boolean; checks?: QACheck[]; generator?: string };
+  priority: number;
+  status: "draft" | "qa_failed";
+  created_at: string;
+}
 
 export interface Meta {
   dataset: {
@@ -301,6 +358,9 @@ export interface Meta {
     models: Record<string, string>;
     max_llm_emails: number;
     breaker_reason: string | null;
+    chain?: { provider: string; model: string }[];
+    disabled_providers?: Record<string, string>;
+    ai_emails_for_everyone?: boolean;
   };
   versions: Record<string, any>;
   embed_model: string;

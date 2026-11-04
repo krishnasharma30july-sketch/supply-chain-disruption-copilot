@@ -11,6 +11,14 @@ weights:
 
 breach_days_cap: 7
 seller_late_rate_cap: 0.5
+default_seller_late_rate: 0.08   # used when a seller has no delivery history (A21)
+
+# Share of the complexity points for each kind of order.
+complexity:
+  multi_seller: 1.0   # items from more than one seller
+  mixed_impact: 0.7   # some items of the order are not affected
+  multi_item: 0.4     # several items, one seller, all affected
+  single_item: 0.0
 
 # Billable-weight tiers (kg, upper bound inclusive). Above the last tier, or BULKY profile -> 1.0
 weight_tiers:

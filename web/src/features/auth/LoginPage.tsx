@@ -127,8 +127,8 @@ export default function LoginPage({ config }: { config?: AuthConfig }) {
               </label>
             )}
             <label className="block text-sm">
-              <span className="font-medium text-slate-700">Email</span>
-              <input type="email" autoComplete={mode === "signin" ? "username" : "email"} value={email} onChange={(e) => setEmail(e.target.value)} className={input} required />
+              <span className="font-medium text-slate-700">{mode === "signin" ? "Email or username" : "Email"}</span>
+              <input type={mode === "signin" ? "text" : "email"} autoComplete={mode === "signin" ? "username" : "email"} value={email} onChange={(e) => setEmail(e.target.value)} className={input} required />
             </label>
             <label className="block text-sm">
               <span className="font-medium text-slate-700">Password</span>

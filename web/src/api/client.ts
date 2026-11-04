@@ -9,6 +9,7 @@ import type {
   Meta,
   OrderDetail,
   OrderRow,
+  OutreachItem,
   Page,
   ParseResponse,
   PreviewCounts,
@@ -110,6 +111,8 @@ export const api = {
     request<Page<Communication>>(`/runs/${id}/communications${qs(params)}`),
   bulkApprove: (id: string, ids: string[]) => post<{ updated: number; skipped: number }>(`/runs/${id}/communications/approve`, { ids }),
   bulkDraft: (id: string, ids: string[]) => post<{ updated: number; skipped: number }>(`/runs/${id}/communications/draft`, { ids }),
+  upgradeEmails: (id: string) => post<{ updated: number; skipped: number; detail: string[] }>(`/runs/${id}/communications/upgrade`),
+  outreach: (id: string) => request<OutreachItem[]>(`/runs/${id}/outreach`),
 
   editCommunication: (id: string, subject: string, body: string) =>
     request<Communication>(`/communications/${id}`, { method: "PATCH", body: JSON.stringify({ subject, body }) }),

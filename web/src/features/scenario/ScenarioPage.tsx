@@ -19,7 +19,7 @@ export default function ScenarioPage() {
   const navigate = useNavigate();
   const meta = useQuery({ queryKey: ["meta"], queryFn: api.meta });
   const [query, setQuery] = useState(EXAMPLES[0]);
-  const [options, setOptions] = useState<RunOptions>({ locale: "en", max_llm_emails: null, date_rebase: false, use_llm: true });
+  const [options, setOptions] = useState<RunOptions>({ locale: "en", max_llm_emails: null, date_rebase: false, use_llm: true, ai_all_emails: null });
   const [parsed, setParsed] = useState<ParseResponse | null>(null);
   const [spec, setSpec] = useState<DisruptionSpec | null>(null);
   const [preview, setPreview] = useState<PreviewCounts | null>(null);
@@ -53,7 +53,9 @@ export default function ScenarioPage() {
   });
 
   const createRun = useMutation({
-    mutationFn: () => api.createRun({ query, spec: spec ?? undefined, options }),
+    // Send what the checkbox shows: while the server reports the LLM as unavailable the box is unticked and disabled,
+    // so the run must not silently go out with the LLM on.
+    mutationFn: () => api.createRun({ query, spec: spec ?? undefined, options: { ...options, use_llm: options.use_llm && llmAvailable } }),
     onSuccess: (run) => navigate(`/runs/${run.id}`),
   });
 
@@ -155,6 +157,18 @@ export default function ScenarioPage() {
               onChange={(e) => setOptions({ ...options, max_llm_emails: e.target.value === "" ? null : Math.max(0, Number(e.target.value)) })}
               className="w-20 rounded-md border border-slate-300 px-2 py-1"
             />
+          </label>
+          <label
+            className="flex items-center gap-2"
+            title="After the run finishes, the remaining template emails are written by the AI in the background, most severe first. Each one is fact-checked, and emails a person has approved or edited are never changed."
+          >
+            <input
+              type="checkbox"
+              checked={(options.ai_all_emails ?? meta.data?.llm.ai_emails_for_everyone ?? false) && options.use_llm && llmAvailable}
+              disabled={!llmAvailable || !options.use_llm}
+              onChange={(e) => setOptions({ ...options, ai_all_emails: e.target.checked })}
+            />
+            AI-write every email (background)
           </label>
           <label className="flex items-center gap-2" title="Shift email dates so the snapshot date maps to today (presentation only)">
             <input type="checkbox" checked={options.date_rebase} onChange={(e) => setOptions({ ...options, date_rebase: e.target.checked })} />

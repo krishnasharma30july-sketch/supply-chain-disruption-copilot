@@ -36,7 +36,7 @@ from app.services.geo import normalize_city, title_city
 from app.services.retrieval.kb import load_kb
 
 log = get_logger(__name__)
-ETL_VERSION = "etl-v3"  # bump whenever ETL code changes what is loaded (code is not part of the fingerprint)
+ETL_VERSION = "etl-v4"  # bump whenever ETL code changes what is loaded (code is not part of the fingerprint)
 TS_FMT = "%Y-%m-%d %H:%M:%S"
 BRAZIL_BBOX = {"lat": (-34.0, 5.5), "lng": (-74.0, -34.0)}
 
@@ -500,9 +500,22 @@ def run_etl(force: bool = False, as_of: datetime | None = None) -> dict:
         cats_by_seller.setdefault(sid, {})
         cats_by_seller[sid][prod["category_en"]] = cats_by_seller[sid].get(prod["category_en"], 0) + 1
         classes_by_seller.setdefault(sid, set()).add(prod["product_class"])
+    # Where each seller's parcels go (destination state of the customer), from the as-of snapshot only: the future is hidden.
+    dest_of_order = {o["order_id"]: customer_by_id[o["customer_id"]]["state"] for o in order_rows}
+    ship_all: dict[str, dict[str, int]] = {}
+    ship_active: dict[str, dict[str, int]] = {}
+    for it in item_rows:
+        dest = dest_of_order[it["order_id"]]
+        by = ship_all.setdefault(it["seller_id"], {})
+        by[dest] = by.get(dest, 0) + 1
+        if stage_by_order[it["order_id"]] != "delivered":
+            act = ship_active.setdefault(it["seller_id"], {})
+            act[dest] = act.get(dest, 0) + 1
     for sid, cats in cats_by_seller.items():
         top = [c for c, _ in sorted(cats.items(), key=lambda kv: -kv[1])[:5]]
-        docs.append(seller_document(seller_by_id[sid], sstats.get(sid), top, sorted(classes_by_seller[sid]), active_by_seller.get(sid, 0)))
+        docs.append(seller_document(
+            seller_by_id[sid], sstats.get(sid), top, sorted(classes_by_seller[sid]), active_by_seller.get(sid, 0),
+            ship_active.get(sid), ship_all.get(sid)))
     for c in cat_rows:
         docs.append(category_document(c["name_pt"], c["name_en"], c["product_class"]))
     for ch in load_kb(settings.kb_dir):

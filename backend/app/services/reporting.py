@@ -103,6 +103,15 @@ def compute_stats(
             "investigated_by_agent": sum(1 for d in decisions if d.decided_by == "llm_investigator"),
             "human_callback": sum(1 for d in decisions if d.compensation.human_callback),
         },
+        # Decisions that rest on assumptions the data cannot confirm: alternate-carrier capacity (A13) and alternate-seller stock (A12).
+        "assumption_exposure": {
+            "alt_route_orders": actions.get("REROUTE_ALT_ROUTE", 0),
+            "alt_seller_orders": actions.get("REROUTE_ALT_SELLER", 0),
+            "share_of_delayed": _round(
+                (actions.get("REROUTE_ALT_ROUTE", 0) + actions.get("REROUTE_ALT_SELLER", 0)) / len(delayed), 3
+            ) if delayed else 0.0,
+            "extra_cost_brl": _round(reroute_cost),
+        },
         "cost": {
             "refunds_brl": _round(comp_refunds),
             "vouchers_brl": _round(comp_vouchers),
@@ -165,11 +174,34 @@ def _n(count: int, noun: str) -> str:
     return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
 
 
-def narrative_facts(stats: dict, spec: DisruptionSpec) -> dict:
+def narrative_sources(retrieval: dict | None, limit: int = 3) -> dict:
+    """The retrieved evidence the summary may refer to, as names only (no numbers, so the number check stays exact):
+    the policy sections hybrid search ranked for this scenario and the heavy or bulky categories it found."""
+    policy: list[dict] = []
+    bulky: list[str] = []
+    for q in (retrieval or {}).get("queries", []):
+        if q.get("purpose") == "Applicable policy":
+            policy = [{"id": h["ref_id"], "title": h["title"]} for h in q.get("hits", [])[:limit]]
+        elif q.get("purpose") == "Heavy / bulky impacted products":
+            for h in q.get("hits", []):
+                name = h["title"].split(" | ")[0].strip()
+                if name and name not in bulky:
+                    bulky.append(name)
+    return {"policy": policy, "bulky_categories": bulky[:limit]}
+
+
+def narrative_facts(stats: dict, spec: DisruptionSpec, sources: dict | None = None) -> dict:
     """Pre-formatted facts handed to the LLM; the narrative may only use numbers that appear here."""
     s = stats["scope"]
     pct_breach = round(100 * s["orders_breaching"] / s["orders_delayed"]) if s["orders_delayed"] else 0
+    extra = {}
+    if sources and (sources.get("policy") or sources.get("bulky_categories")):
+        extra = {"retrieved_sources": {
+            "policy_sections": sources.get("policy", []),
+            "heavy_or_bulky_categories_found_by_search": sources.get("bulky_categories", []),
+        }}
     return {
+        **extra,
         "disruption": spec.title,
         "duration_days": spec.duration_days,
         "recovery_days": spec.recovery_days,

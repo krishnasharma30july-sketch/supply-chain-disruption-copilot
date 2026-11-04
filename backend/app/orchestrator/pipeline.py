@@ -15,6 +15,7 @@ from app.agents.base import AgentContext, RunState
 from app.agents.customer_success import CustomerSuccessAgent
 from app.agents.intake import IntakeAgent
 from app.agents.mitigation import MitigationAgent
+from app.agents.outreach import OutreachAgent
 from app.agents.qa_critic import QACriticAgent
 from app.agents.reporter import ReporterAgent
 from app.agents.scout import ScoutAgent
@@ -22,7 +23,7 @@ from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.core.metrics import RUN_DURATION, RUNS_FINISHED
 from app.core.policy_config import get_assumptions, get_category_classes, get_policy, get_scoring
-from app.db.models import Communication, LlmCall, OrderOutcome, Run, RunSummary
+from app.db.models import Communication, LlmCall, OrderOutcome, OutreachItem, Run, RunSummary
 from app.db.session import get_sessionmaker
 from app.domain.models import DisruptionSpec, RunOptions
 from app.llm.service import PROMPT_VERSIONS, LLMService
@@ -40,6 +41,7 @@ STAGES = [
     ("mitigation", "Mitigation"),
     ("customer_success", "Customer Success"),
     ("qa_critic", "QA Critic"),
+    ("outreach", "Outreach"),
     ("reporter", "Reporter"),
 ]
 
@@ -56,7 +58,11 @@ def config_snapshot(llm: LLMService) -> dict:
         "llm": {
             "provider": s.llm_provider if llm.enabled else "offline",
             "models": {r: s.model_for(r) for r in ("intake", "email", "adjudicator", "summary")},
+            "chain": [f"{p}:{m}" for p, m in s.llm_chain("email")] if llm.enabled else [],
             "max_llm_emails": s.max_llm_emails,
+            "max_agent_cases": s.max_agent_cases,
+            "ai_emails_for_everyone": s.ai_emails_for_everyone,
+            "tone_review": s.tone_review_enabled,
         },
         "embed_model": s.embed_model,
     }
@@ -126,7 +132,7 @@ async def execute_run(run_id: str, llm: LLMService, embedder=None) -> str:
         if run.status == "running" and not is_stale(run):
             log.info("run_owned_by_live_worker", run_id=run_id)
             return "running"
-        for model in (OrderOutcome, Communication, RunSummary):
+        for model in (OrderOutcome, Communication, OutreachItem, RunSummary):
             await s.execute(delete(model).where(model.run_id == run_id))
         run.status = "running"
         run.started_at = datetime.now(timezone.utc)
@@ -161,7 +167,9 @@ async def _run_stages(run_id, llm, embedder, settings, sf, emitter, state, stage
         # Emitted first: the UI treats the latest run_started as the beginning of the current attempt.
         await emitter.emit(
             "run", "run_started",
-            f"Run started (LLM {'on: ' + settings.model_for('email') if use_llm else 'off: deterministic mode'}).",
+            "Run started (LLM " + (
+                "on: " + " → ".join(f"{p}/{m}" for p, m in settings.llm_chain("email")[:4])
+                if use_llm else "off: deterministic mode") + ").",
             {"llm": use_llm},
         )
         async with sf() as s:
@@ -179,7 +187,7 @@ async def _run_stages(run_id, llm, embedder, settings, sf, emitter, state, stage
         await emitter.emit("run", "info", f"Snapshot as of {ref.as_of:%Y-%m-%d}.", {"as_of": ref.as_of.isoformat()})
         writer = CustomerSuccessAgent()
         agents = [IntakeAgent(), ScoutAgent(), LogisticsAnalystAgent(), MitigationAgent(), writer,
-                  QACriticAgent(writer), ReporterAgent()]
+                  QACriticAgent(writer), OutreachAgent(), ReporterAgent()]
         for agent in agents:
             if await _cancel_requested(run_id):
                 await emitter.emit("run", "run_canceled", "Run canceled by the user.", level="warning")
@@ -222,6 +230,7 @@ async def _finish(run_id: str, status: str, state: RunState, stage_ms: dict, t_r
         "llm_usage": usage,
         "llm_degraded": llm.breaker_reason,
         "communications": state.metrics.get("communications", {}),
+        "outreach": state.metrics.get("outreach", {}),
     }
     async with get_sessionmaker()() as s:
         run = await s.get(Run, run_id)

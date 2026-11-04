@@ -124,7 +124,7 @@ export default function OrderDrawer({ runId, orderId, onClose }: { runId: string
                   <div className="rounded-lg bg-slate-50 p-3">
                     <p className="text-xs text-slate-500">Promised / projected / after mitigation</p>
                     <p className="mt-1">{fmtDate(row.sla_ts)} → {fmtDate(row.projected_eta)} → <strong>{fmtDate(decision.resolution_eta)}</strong></p>
-                    <p className="text-xs text-slate-500">P(miss promise) {fmtPct(row.p_breach)} (baseline {fmtPct(impact.p_breach_baseline)})</p>
+                    <p className="text-xs text-slate-500">P(miss promise) {fmtPct(row.p_breach)} if the event unfolds as described (baseline {fmtPct(impact.p_breach_baseline)})</p>
                   </div>
                   <div className="rounded-lg bg-slate-50 p-3">
                     <p className="text-xs text-slate-500">Compensation ({decision.compensation.tier_label || "none"})</p>

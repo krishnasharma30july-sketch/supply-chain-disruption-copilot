@@ -14,6 +14,7 @@ from app.services.reporting import (
     check_narrative,
     compute_stats,
     narrative_facts,
+    narrative_sources,
     recommendations,
     template_narrative,
 )
@@ -28,9 +29,18 @@ class ReporterAgent:
         comms = state.metrics.get("communications", {})
         stats = compute_stats(state.spec, state.impacts, state.decisions, comms, ctx.ref.seller_geo)
         recs = recommendations(stats, state.spec)
-        facts = narrative_facts(stats, state.spec)
+        outreach = state.metrics.get("outreach") or {}
+        if outreach.get("call_briefs"):
+            n = outreach["call_briefs"]
+            recs.append(f"Use the {n} prepared call brief{'' if n == 1 else 's'} on the Outreach tab for the critical-severity customers.")
+        if outreach.get("seller_notices"):
+            n = outreach["seller_notices"]
+            recs.append(f"Review and send the {n} drafted seller notice{'' if n == 1 else 's'} (Outreach tab); nothing is sent automatically.")
+        offered = narrative_sources(state.retrieval)
+        facts = narrative_facts(stats, state.spec, offered)
         headline, narrative = template_narrative(stats, state.spec)
         generator = "template"
+        cited: list[dict] = []
         check: dict = {"checked": False, "problems": []}
 
         if ctx.use_llm and ctx.llm.available and stats["scope"]["orders_delayed"] > 0:
@@ -50,6 +60,9 @@ class ReporterAgent:
                 check = {"checked": True, "problems": problems, "attempt": attempt + 1}
                 if not problems:
                     headline, narrative, generator = res.parsed.headline.strip(), res.parsed.narrative.strip(), "llm"
+                    # Keep only citations of sections that were actually offered: a made-up id is dropped, never shown.
+                    titles = {p["id"]: p["title"] for p in offered["policy"]}
+                    cited = [{"id": i, "title": titles[i]} for i in dict.fromkeys(res.parsed.sources) if i in titles]
                     break
                 feedback = "; ".join(problems[:6])
                 await ctx.emitter.emit(
@@ -59,6 +72,7 @@ class ReporterAgent:
                 check["fallback"] = "template"
 
         state.stats = stats
+        state.retrieval = {**state.retrieval, "narrative_sources": cited, "offered_sources": offered}
         state.summary = {
             "headline": headline, "narrative": narrative, "recommendations": recs,
             "number_check": check, "generator": generator,

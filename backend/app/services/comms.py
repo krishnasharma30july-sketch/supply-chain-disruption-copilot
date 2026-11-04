@@ -6,6 +6,8 @@ same sheet feeds the template fallback and the QA allow-lists, so every channel 
 
 from __future__ import annotations
 
+import re
+
 import hashlib
 from collections import Counter
 from datetime import datetime, timedelta
@@ -130,11 +132,38 @@ def _item_label(li, locale: str) -> str:
     return pretty_category(li.category_en)
 
 
+_ITEM_PATTERNS = (
+    re.compile(r"^(\d+) itens? de (.+)$"),     # pt-BR: "2 itens de Cama Mesa Banho"
+    re.compile(r"^(\d+) (.+?) items?$"),       # English: "2 Bed Bath Table items"
+    re.compile(r"^(\d+) x (.+)$"),             # older stored fact sheets: "2 x Bed Bath Table"
+)
+
+
+def item_phrase(n: int, category: str, locale: str) -> str:
+    """How an item line reads in an email. Olist has no product names, only a category, so a bare "1 x Baby" read like a
+    code; the phrase now says what it is: "1 Baby item", "2 Bed Bath Table items", "2 itens de Cama Mesa Banho"."""
+    if category in ("Item", ""):
+        return f"{n} item" if n == 1 else (f"{n} itens" if locale == "pt-BR" else f"{n} items")
+    if locale == "pt-BR":
+        return f"{n} {'item' if n == 1 else 'itens'} de {category}"
+    return f"{n} {category} item" + ("" if n == 1 else "s")
+
+
+def parse_item(label: str) -> tuple[int, str]:
+    """(count, category) from an item phrase (any of the formats above). The category is "" for a plain "N item(s)"."""
+    for pattern in _ITEM_PATTERNS:
+        m = pattern.match(label.strip())
+        if m:
+            return int(m.group(1)), m.group(2)
+    m = re.match(r"^(\d+)\b", label.strip())
+    return (int(m.group(1)) if m else 1), ""
+
+
 def _items(impact: OrderImpact, locale: str, item_ids: set[int] | None = None) -> list[str]:
     counts = Counter(
         _item_label(li, locale) for li in impact.lines if item_ids is None or li.order_item_id in item_ids
     )
-    return [f"{n} x {name}" for name, n in counts.items()]
+    return [item_phrase(n, name, locale) for name, n in counts.items()]
 
 
 def _summary(dec: MitigationDecision, start: str, end: str, locale: str) -> str:
@@ -214,7 +243,7 @@ def build_customer_facts(
         numbers.append(float(dec.resolution_days_late))
         numbers.append(float(len(imp.lines)))
         for item in of.items + of.cancelled_items:
-            numbers.append(float(item.split(" x ")[0]))
+            numbers.append(float(parse_item(item)[0]))
 
     placeholders = ["[[TRACK_LINK]]", "[[SUPPORT_LINK]]"]
     if has_voucher:

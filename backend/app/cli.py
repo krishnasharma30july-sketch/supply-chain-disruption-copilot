@@ -125,6 +125,21 @@ async def _export(run_id: str, out_dir: Path) -> None:
     typer.echo(f"Wrote {out_dir}")
 
 
+def console_report(report: str) -> str:
+    """What `run` prints: the impact summary (everything before the order table) and the first sample customer email.
+    The full report, the order list and every sample email are in the output directory."""
+    head, sep, rest = report.partition("## Top 25 orders by severity")
+    out = head.rstrip()
+    marker = "## Sample customer emails"
+    if sep and marker in rest:
+        emails = rest[rest.index(marker):]
+        emails = emails.split("\n## ", 1)[0]  # stop before the next section (assumptions)
+        parts = emails.split("\n### ")
+        if len(parts) > 1:
+            out += f"\n\n{marker}\n\n### {parts[1].rstrip()}"
+    return out + "\n\n(Full report, order list and all sample emails: see the output directory.)"
+
+
 @cli.command()
 def run(
     query: str = typer.Argument(..., help="Disruption scenario, e.g. 'Heavy rains are delaying all freight leaving Sao Paulo for the next 5 days'"),
@@ -140,7 +155,7 @@ def run(
         run_id = await _run_inline(query, offline=offline, locale=locale, max_emails=max_emails)
         target = out or Path("/tmp") / f"run-{run_id[:8]}"
         await _export(run_id, target)
-        typer.echo((target / "impact_summary.md").read_text(encoding="utf-8")[:4000])
+        typer.echo(console_report((target / "impact_summary.md").read_text(encoding="utf-8")))
 
     asyncio.run(main())
 

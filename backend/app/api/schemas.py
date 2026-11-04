@@ -145,6 +145,25 @@ class CommunicationPage(BaseModel):
     items: list[CommunicationOut]
 
 
+class OutreachOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    run_id: str
+    kind: str  # call_brief | seller_notice
+    ref: str
+    title: str
+    subject: str | None
+    body: str
+    data: dict
+    generator: str
+    model: str | None
+    prompt_version: str | None
+    qa: dict
+    priority: float
+    status: str
+    created_at: datetime
+
+
 class CommunicationEdit(BaseModel):
     subject: str = Field(min_length=3, max_length=200)
     body: str = Field(min_length=20, max_length=8000)

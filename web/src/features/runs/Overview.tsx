@@ -12,7 +12,8 @@ export default function Overview({ run }: { run: Run }) {
   const [mapMode, setMapMode] = useState<"dest" | "origin">("dest");
   if (q.isLoading) return <Loading />;
   if (q.error || !q.data) return <ErrorBox error={q.error} />;
-  const { stats, headline, narrative, recommendations, generator, number_check } = q.data;
+  const { stats, headline, narrative, recommendations, generator, number_check, retrieval } = q.data;
+  const cited = retrieval?.narrative_sources ?? [];
   const s = stats.scope;
   const severityData = TIERS.map((t) => ({ tier: t, orders: stats.severity[t] ?? 0 }));
   const actionData = Object.entries(stats.actions as Record<Action, number>)
@@ -32,7 +33,7 @@ export default function Overview({ run }: { run: Run }) {
         <Kpi label="Sellers affected" value={fmtInt(s.sellers_delayed)} />
         <Kpi label="SKUs affected" value={fmtInt(s.skus_delayed)} hint={`${fmtInt(s.bulky_orders_delayed)} bulky orders`} />
         <Kpi label="Average hold" value={`${fmtNum(s.avg_hold_days, 1)} d`} hint="disruption window + recovery" tone="warn" />
-        <Kpi label="Mitigation cost (est.)" value={fmtBRL(stats.cost.total_brl)} hint="refunds + vouchers + reroutes" />
+        <Kpi label="Mitigation cost (est.)" value={fmtBRL(stats.cost.total_brl)} hint={((stats.assumption_exposure?.alt_route_orders ?? 0) + (stats.assumption_exposure?.alt_seller_orders ?? 0)) > 0 ? `${(stats.assumption_exposure?.alt_route_orders ?? 0) + (stats.assumption_exposure?.alt_seller_orders ?? 0)} orders rely on assumed carrier capacity or stock` : "refunds + vouchers + reroutes"} />
       </div>
 
       <Card
@@ -48,6 +49,14 @@ export default function Overview({ run }: { run: Run }) {
         }
       >
         <p className="whitespace-pre-line text-sm leading-6 text-slate-700">{narrative}</p>
+        {cited.length > 0 && (
+          <p className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-slate-500" data-testid="narrative-sources">
+            Sources retrieved by search:
+            {cited.map((c) => (
+              <Badge key={c.id} title={c.id}>{c.title}</Badge>
+            ))}
+          </p>
+        )}
         {recommendations.length > 0 && (
           <>
             <h3 className="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Recommended operational actions</h3>

@@ -10,6 +10,7 @@ import CommsTab from "./CommsTab";
 import DetailsTab from "./DetailsTab";
 import EvidenceTab from "./EvidenceTab";
 import OrdersTab from "./OrdersTab";
+import OutreachTab from "./OutreachTab";
 import Overview from "./Overview";
 import Timeline from "./Timeline";
 
@@ -22,7 +23,7 @@ const STATUS_STYLE: Record<RunStatus, string> = {
   canceled: "bg-amber-50 text-amber-900 ring-amber-300",
 };
 
-type Tab = "overview" | "orders" | "comms" | "evidence" | "details";
+type Tab = "overview" | "orders" | "comms" | "outreach" | "evidence" | "details";
 
 export default function RunPage() {
   const { runId = "" } = useParams();
@@ -92,6 +93,7 @@ export default function RunPage() {
                 { id: "overview", label: "Impact summary" },
                 { id: "orders", label: "Orders & decisions" },
                 { id: "comms", label: "Customer emails" },
+                { id: "outreach", label: "Outreach" },
                 { id: "evidence", label: "Retrieval evidence" },
                 { id: "details", label: "Run details" },
               ]}
@@ -99,6 +101,7 @@ export default function RunPage() {
             {tab === "overview" && <Overview run={run} />}
             {tab === "orders" && <OrdersTab runId={run.id} />}
             {tab === "comms" && <CommsTab runId={run.id} />}
+            {tab === "outreach" && <OutreachTab runId={run.id} />}
             {tab === "evidence" && <EvidenceTab runId={run.id} />}
             {tab === "details" && <DetailsTab runId={run.id} />}
           </div>

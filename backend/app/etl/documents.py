@@ -6,7 +6,7 @@ from collections import Counter
 from datetime import datetime
 
 from app.services.formatting import pretty_category
-from app.services.geo import title_city
+from app.services.geo import STATE_NAMES, title_city
 
 STAGE_LABELS = {
     "pending_approval": "pending payment approval",
@@ -106,18 +106,33 @@ def product_document(p: dict, sellers_offering: int) -> dict:
     }
 
 
-def seller_document(s: dict, stats: dict | None, categories: list[str], classes: list[str], active_orders: int) -> dict:
+def destinations_line(label: str, counts: dict[str, int] | None, top: int = 5) -> str | None:
+    """'Label: Rio de Janeiro (RJ) 45%, Sao Paulo (SP) 30%': where a seller's parcels go. Written with the full state
+    name so that a query such as "courier strike in Rio de Janeiro" matches by words as well as by meaning."""
+    if not counts:
+        return None
+    total = sum(counts.values())
+    best = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:top]
+    return f"{label}: " + ", ".join(f"{STATE_NAMES.get(uf, uf)} ({uf}) {n / total:.0%}" for uf, n in best)
+
+
+def seller_document(
+    s: dict, stats: dict | None, categories: list[str], classes: list[str], active_orders: int,
+    ship_active: dict[str, int] | None = None, ship_all: dict[str, int] | None = None,
+) -> dict:
     st = stats or {}
     rate = st.get("late_delivery_rate")
     handling = st.get("median_handling_days")
-    content = "\n".join([
+    content = "\n".join(line for line in [
         f"Seller {s['seller_id']} located in {title_city(s['city_norm'])}, {s['state']}",
         "Tags: " + " ".join(sorted({t for c in classes for t in CLASS_TAGS.get(c, '').split()})),
         "Sells: " + (", ".join(pretty_category(c) for c in categories) or "n/a"),
         f"Active orders in the snapshot: {active_orders}",
         f"Historical late-delivery rate: {rate:.0%}" if rate is not None else "Historical late-delivery rate: n/a",
         f"Median handling time: {handling:.1f} days" if handling is not None else "Median handling time: n/a",
-    ])
+        destinations_line("Parcels in the pipeline now go to", ship_active),
+        destinations_line("Overall ships to", ship_all),
+    ] if line)
     return {
         "doc_id": f"seller:{s['seller_id']}", "doc_type": "seller", "ref_id": s["seller_id"],
         "title": f"Seller {s['seller_id'][:8]} | {title_city(s['city_norm'])}, {s['state']}",

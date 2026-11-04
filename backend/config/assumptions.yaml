@@ -93,3 +93,32 @@ items:
     title: Corpus
     statement: "The 10,000 most recent non-canceled orders purchased at or before AS_OF are loaded and indexed. Only non-delivered ones are actionable."
     impact: "Bounded index size and reproducible runs."
+
+  - id: A20
+    title: Severity model
+    statement: "Severity (0 to 100) adds six weighted parts: days late 35 (capped at 7 days), breach probability 15, freight weight 20 (tiers at 5, 10 and 30 kg), order value 15 (percentile among actionable orders), seller late rate 10 (capped at 50%) and complexity 5. 75 or more is critical, 50 high, 25 medium. These weights, caps and tiers are design choices, not measured values."
+    impact: "Ranks orders for review and decides who gets a care call. All values are in config/scoring.yaml and each run records them."
+  - id: A21
+    title: Defaults when data is missing
+    statement: "A seller without history is assumed to be late 8% of the time. A seller without handling or approval history uses the global median. A product without a category is STANDARD with low confidence."
+    impact: "Keeps every order scoreable; low-confidence classes are flagged for review (scoring.yaml and category_classes.yaml)."
+  - id: A22
+    title: Compensation terms
+    statement: "Compensation depends on calendar days late after mitigation: 1 to 3 days a freight refund, 4 to 7 days plus a 10% voucher (max R$ 50), 8 or more days plus a 15% voucher (max R$ 100). Vouchers are single use and valid for 90 days. Critical orders get a care call."
+    impact: "Amounts come only from policy.yaml; neither the LLM nor an email can exceed them."
+  - id: A23
+    title: Mitigation thresholds
+    statement: "No action when the order stays on time with under 20% breach risk; a heads-up when it moves 2 or more days or the risk is 20% or more. Cancellation is offered for perishables 2 days late, essentials 3, bulky freight 10 and everything else 14. An alternate seller must be at most 10% dearer and 2 days faster; an alternate route must save at least 1 day."
+    impact: "These cut-offs decide the action for each order. All are in policy.yaml."
+  - id: A24
+    title: Disruption timing
+    statement: "A disruption starts at the as-of date unless the alert gives a start, lasts exactly its stated duration, and the recovery period follows it."
+    impact: "Defines the window that holds shipments (the interpretation screen lets the user edit start, duration and recovery)."
+  - id: A25
+    title: Transit times are history, not forecast
+    statement: "Route transit times come from all earlier deliveries as one distribution per route, so season, weather and carrier differences are ignored. The disruption is a hold added on top of the normal journey, and routes do not affect each other."
+    impact: "The breach probability is a scenario estimate, not a forecast: the backtest shows it is over-confident in the real world."
+  - id: A26
+    title: Orders with several items
+    statement: "An order with several items is as late as its latest item. Unaffected items are shipped normally (a split shipment) and one email covers the whole order."
+    impact: "Order-level dates, severity and compensation follow the slowest affected item; mixed orders are flagged for review."

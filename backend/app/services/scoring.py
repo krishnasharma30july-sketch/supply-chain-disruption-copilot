@@ -7,8 +7,6 @@ from bisect import bisect_right
 from app.core.policy_config import ScoringConfig
 from app.domain.models import OrderImpact, SellerStat, SeverityComponent, Tier
 
-DEFAULT_SELLER_LATE_RATE = 0.08
-
 
 def _weight_value(kg: float, profile: str, cfg: ScoringConfig) -> float:
     if profile == "BULKY":
@@ -54,17 +52,17 @@ def score_order(
     rates = []
     for li in affected_lines:
         st = seller_stats.get(li.seller_id)
-        rates.append(st.late_delivery_rate if st and st.late_delivery_rate is not None else DEFAULT_SELLER_LATE_RATE)
-    seller_v = min(max(rates, default=DEFAULT_SELLER_LATE_RATE) / cfg.seller_late_rate_cap, 1.0)
+        rates.append(st.late_delivery_rate if st and st.late_delivery_rate is not None else cfg.default_seller_late_rate)
+    seller_v = min(max(rates, default=cfg.default_seller_late_rate) / cfg.seller_late_rate_cap, 1.0)
     sellers = {li.seller_id for li in imp.lines}
     if len(sellers) > 1:
-        complexity = 1.0
+        complexity = cfg.complexity.multi_seller
     elif len(affected_lines) < len(imp.lines):
-        complexity = 0.7
+        complexity = cfg.complexity.mixed_impact
     elif len(imp.lines) > 1:
-        complexity = 0.4
+        complexity = cfg.complexity.multi_item
     else:
-        complexity = 0.0
+        complexity = cfg.complexity.single_item
 
     comps = [
         SeverityComponent(

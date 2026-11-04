@@ -2,8 +2,8 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import clsx from "clsx";
 import { useEffect, useState } from "react";
 import { api } from "../../api/client";
-import type { Communication } from "../../api/types";
-import { Badge, Button, Card, Empty, ErrorBox, Loading, Notice } from "../../components/ui";
+import type { AiUpgrade, Communication } from "../../api/types";
+import { Badge, Button, Card, Empty, ErrorBox, Loading, Notice, Spinner } from "../../components/ui";
 import { fmtTimestamp } from "../../lib/format";
 import { useAuth } from "../auth/useAuth";
 
@@ -28,11 +28,35 @@ export default function CommsTab({ runId }: { runId: string }) {
   const params = { status: status === "all" ? undefined : [status], limit: PAGE, offset };
   // After an approval the mail worker delivers in the background: poll briefly so "approved" turns into "sent".
   const [watchUntil, setWatchUntil] = useState(0);
+  // The AI coverage job writes the remaining template emails in the background; its progress lives in the run's metrics.
+  const runQ = useQuery({
+    queryKey: ["run", runId],
+    queryFn: () => api.run(runId),
+    refetchInterval: (q) => {
+      const s = (q.state.data?.metrics?.ai_upgrade as AiUpgrade | undefined)?.state;
+      return s === "queued" || s === "running" ? 4000 : false;
+    },
+  });
+  const upgrade = runQ.data?.metrics?.ai_upgrade as AiUpgrade | undefined;
+  const upgrading = upgrade?.state === "queued" || upgrade?.state === "running";
   const listQ = useQuery({
     queryKey: ["comms", runId, params],
     queryFn: () => api.communications(runId, params),
     placeholderData: keepPreviousData,
-    refetchInterval: () => (Date.now() < watchUntil ? 2000 : false),
+    refetchInterval: () => (upgrading ? 5000 : Date.now() < watchUntil ? 2000 : false),
+  });
+  const templateQ = useQuery({
+    queryKey: ["comms", runId, "template-count"],
+    queryFn: () => api.communications(runId, { generator: ["template"], status: ["draft", "qa_failed"], limit: 1 }),
+    refetchInterval: () => (upgrading ? 5000 : false),
+  });
+  const templatesLeft = templateQ.data?.total ?? 0;
+  const startUpgrade = useMutation({
+    mutationFn: () => api.upgradeEmails(runId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["run", runId] });
+      qc.invalidateQueries({ queryKey: ["comms", runId] });
+    },
   });
   const items = listQ.data?.items ?? [];
   const selected = items.find((c) => c.id === selectedId) ?? items[0] ?? null;
@@ -67,6 +91,11 @@ export default function CommsTab({ runId }: { runId: string }) {
           </button>
         ))}
         <div className="ml-auto flex gap-2">
+          <Button variant="secondary" onClick={() => startUpgrade.mutate()} loading={startUpgrade.isPending}
+            disabled={templatesLeft === 0 || upgrading}
+            title="Write every remaining template email with the AI in the background, most severe first. Each draft is fact-checked; approved or edited emails are never changed.">
+            Write all {templatesLeft || ""} with AI
+          </Button>
           <Button variant="secondary" onClick={() => bulkDraft.mutate()} loading={bulkDraft.isPending} disabled={templates === 0}
             title={`Queue LLM drafting for the ${MAX_AI_DRAFTS} highest-severity template emails on this page`}>
             Draft top {templates} with AI
@@ -79,7 +108,29 @@ export default function CommsTab({ runId }: { runId: string }) {
         </div>
       </div>
       {bulkDraft.isSuccess && <Notice>Queued. Refresh in a little while to see AI drafts (each one is QA-checked before it replaces the template).</Notice>}
-      <ErrorBox error={bulkApprove.error || bulkDraft.error} />
+      {upgrade && upgrade.state !== "done" && (
+        <Notice tone={upgrade.state === "stopped" ? "warning" : "info"}>
+          {upgrading ? (
+            <span className="flex items-center gap-2">
+              <Spinner small />
+              The AI is writing the remaining emails in the background: {upgrade.upgraded} done
+              {upgrade.remaining != null ? `, ${upgrade.remaining} to go` : ""}. Each draft is fact-checked before it replaces the template.
+            </span>
+          ) : (
+            <>
+              AI drafting paused{upgrade.reason ? `: ${upgrade.reason}` : ""}. {upgrade.upgraded} emails were upgraded; the rest keep their
+              verified templates. Use “Write all with AI” to continue.
+            </>
+          )}
+        </Notice>
+      )}
+      {upgrade?.state === "done" && upgrade.upgraded > 0 && (
+        <Notice>
+          Every email now has an AI-written draft ({upgrade.upgraded} upgraded in the background
+          {upgrade.failed ? `; ${upgrade.failed} kept their verified template because the AI draft failed the fact check` : ""}).
+        </Notice>
+      )}
+      <ErrorBox error={bulkApprove.error || bulkDraft.error || startUpgrade.error} />
 
       {listQ.isLoading ? (
         <Loading />
@@ -105,7 +156,10 @@ export default function CommsTab({ runId }: { runId: string }) {
                       </span>
                     </div>
                     <p className="mt-0.5 truncate text-xs text-slate-600">{c.subject}</p>
-                    <p className="text-[11px] text-slate-400">severity {Math.round(c.max_severity)} · {c.order_ids.length} order(s)</p>
+                    <p className="text-[11px] text-slate-400">
+                      severity {Math.round(c.max_severity)} · {c.order_ids.length} order(s)
+                      {c.qa?.tone && ` · tone ${c.qa.tone.warmth}/${c.qa.tone.clarity}`}
+                    </p>
                   </button>
                 </li>
               ))}
@@ -200,6 +254,19 @@ function EmailEditor({ comm, onChanged, canApprove }: { comm: Communication; onC
       <div className="mt-2">
         <ErrorBox error={save.error || approve.error || reject.error || regenerate.error || resend.error} />
       </div>
+
+      {comm.qa?.tone && (
+        <div className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-700" data-testid="tone-review">
+          <span className="font-semibold uppercase tracking-wide text-slate-500">Tone review (advisory)</span>
+          <span className="ml-2">warmth {comm.qa.tone.warmth}/5 · clarity {comm.qa.tone.clarity}/5</span>
+          {comm.qa.tone.rewritten && comm.qa.tone.before && (
+            <span className="ml-2 text-emerald-800">
+              rewritten after review (was {comm.qa.tone.before.warmth}/{comm.qa.tone.before.clarity})
+            </span>
+          )}
+          {comm.qa.tone.notes && comm.qa.tone.notes !== "None." && <p className="mt-1 text-slate-600">{comm.qa.tone.notes}</p>}
+        </div>
+      )}
 
       <h3 className="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
         QA critic {comm.qa?.passed ? "· passed" : "· failed"}

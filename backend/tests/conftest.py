@@ -1,13 +1,22 @@
+import os
 from datetime import datetime
 
 import pytest
 
-from app.core.policy_config import get_assumptions, get_policy, get_scoring
-from app.domain.models import AltSeller, DisruptionSpec, GeoScope, LaneStat, LineRecord, SellerStat
-from app.services.eta import LaneBook
-from app.services.geo import CityEntry, Gazetteer
-from app.services.impact import EngineContext
-from app.services.policy_engine import PolicyContext
+# Tests never call a real LLM provider: blank every provider key before the settings are first read, even when the
+# developer's .env (or the container environment) contains real ones.
+for _key in ("GEMINI_API_KEY", "GROQ_API_KEY"):
+    os.environ[_key] = ""
+
+from app.core.config import get_settings  # noqa: E402
+from app.core.policy_config import get_assumptions, get_policy, get_scoring  # noqa: E402
+
+get_settings.cache_clear()
+from app.domain.models import AltSeller, DisruptionSpec, GeoScope, LaneStat, LineRecord, SellerStat  # noqa: E402
+from app.services.eta import LaneBook  # noqa: E402
+from app.services.geo import CityEntry, Gazetteer  # noqa: E402
+from app.services.impact import EngineContext  # noqa: E402
+from app.services.policy_engine import PolicyContext  # noqa: E402
 
 AS_OF = datetime(2018, 8, 1)
 

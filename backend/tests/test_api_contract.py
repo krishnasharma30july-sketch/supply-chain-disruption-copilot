@@ -29,6 +29,7 @@ PAIRS: dict[str, type[BaseModel]] = {
     "RunEvent": schemas.EventOut,
     "OrderRow": schemas.OrderRow,
     "Communication": schemas.CommunicationOut,
+    "OutreachItem": schemas.OutreachOut,
     "Decision": MitigationDecision,
     "Summary": schemas.SummaryOut,
     "SearchHit": schemas.SearchHitOut,

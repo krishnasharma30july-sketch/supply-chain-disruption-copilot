@@ -6,7 +6,7 @@ import re
 
 from pydantic import BaseModel
 
-from app.services.comms import PLACEHOLDER_URLS, VOUCHER_PLACEHOLDER, CustomerFacts, QAAllowances
+from app.services.comms import PLACEHOLDER_URLS, VOUCHER_PLACEHOLDER, CustomerFacts, QAAllowances, parse_item
 from app.services.fact_check import scan
 
 PLACEHOLDER_RE = re.compile(r"\[\[[A-Z_]+\]\]")
@@ -43,6 +43,75 @@ class QAReport(BaseModel):
         return [f"{c.name}: {c.detail}" for c in self.checks if not c.passed]
 
 
+def _grounding_checks(full: str, facts: CustomerFacts, allow: QAAllowances, lexical: str | None = None) -> list[QACheck]:
+    """Grounding and policy checks shared by customer emails and call briefs: every date, amount and number must come
+    from the facts, nothing may be offered that was not granted, and no guarantees or internal terms may appear.
+
+    `lexical` is the text the word rules (guarantees, internal terms) apply to; it defaults to `full`. A call brief
+    passes its text without the "avoid" list, because that list legitimately names what the agent must not say."""
+    checks: list[QACheck] = []
+    problems = scan(
+        full,
+        allowed_dates=allow.dates,
+        allowed_money=allow.money,
+        allowed_percents=allow.percents,
+        allowed_numbers=allow.numbers,
+        strip_tokens=[
+            *allow.order_refs, *PLACEHOLDER_URLS.keys(), VOUCHER_PLACEHOLDER, facts.first_name,
+            # Item phrases come from the facts sheet ("1 Home Appliances item"); strip the category name so that a
+            # digit inside it can never be mistaken for an ungrounded number.
+            *sorted({parse_item(item)[1] for o in facts.orders for item in o.items + o.cancelled_items if parse_item(item)[1]},
+                    key=len, reverse=True),
+        ],
+    )
+    checks.append(QACheck(
+        name="facts_grounded", passed=not problems,
+        detail="; ".join(problems[:6]) if problems else "Every date, amount and number matches the facts.",
+    ))
+
+    if not facts.has_voucher and VOUCHER_WORDS_RE.search(full):
+        checks.append(QACheck(name="policy_voucher", passed=False, detail="Mentions a voucher but none is granted."))
+    has_refund = any(o.freight_refund or o.refund_total for o in facts.orders)
+    if not has_refund and not facts.has_cancellation_offer and REFUND_WORDS_RE.search(full):
+        checks.append(QACheck(name="policy_refund", passed=False, detail="Mentions a refund but none is granted."))
+    words = full if lexical is None else lexical
+    guarantee = GUARANTEE_RE.search(words)
+    checks.append(QACheck(
+        name="no_guarantees", passed=guarantee is None,
+        detail=f"Avoid guarantees: '{guarantee.group(0)}'" if guarantee else "No guarantees made.",
+    ))
+    jargon = JARGON_RE.search(words)
+    checks.append(QACheck(
+        name="no_internal_jargon", passed=jargon is None,
+        detail=f"Internal term used: '{jargon.group(0)}'" if jargon else "No internal jargon.",
+    ))
+    return checks
+
+
+def check_brief(text: str, facts: CustomerFacts, allow: QAAllowances, lexical_text: str | None = None) -> QAReport:
+    """Check a care-team call brief (plain text for an internal agent): the same grounding and policy rules as an email,
+    plus no links or placeholders, and every order must be identified. Dates, amounts and numbers are checked everywhere;
+    `lexical_text` (the brief without its "avoid" list) is what the guarantee and internal-term rules apply to."""
+    checks: list[QACheck] = []
+    placeholders = sorted(set(PLACEHOLDER_RE.findall(text)))
+    checks.append(QACheck(
+        name="no_placeholders", passed=not placeholders,
+        detail=("Placeholders are not used in briefs: " + ", ".join(placeholders)) if placeholders else "No placeholders.",
+    ))
+    urls = URL_RE.findall(text)
+    checks.append(QACheck(
+        name="no_raw_links", passed=not urls,
+        detail=("Links are not allowed: " + ", ".join(urls[:3])) if urls else "No raw links.",
+    ))
+    checks.extend(_grounding_checks(text, facts, allow, lexical_text))
+    missing = [o.order_ref for o in facts.orders if o.order_ref not in text]
+    checks.append(QACheck(
+        name="orders_identified", passed=not missing,
+        detail=("Missing order reference " + ", ".join(missing)) if missing else "Every order is identified.",
+    ))
+    return QAReport(passed=all(c.passed for c in checks), checks=checks)
+
+
 def check_email(subject: str, body: str, facts: CustomerFacts, allow: QAAllowances) -> QAReport:
     """Check an email in placeholder form (use comms.unrender first for rendered or human-edited text)."""
     checks: list[QACheck] = []
@@ -66,39 +135,7 @@ def check_email(subject: str, body: str, facts: CustomerFacts, allow: QAAllowanc
         detail=("Raw links are not allowed (use placeholders): " + ", ".join(urls[:3])) if urls else "No raw links.",
     ))
 
-    problems = scan(
-        full,
-        allowed_dates=allow.dates,
-        allowed_money=allow.money,
-        allowed_percents=allow.percents,
-        allowed_numbers=allow.numbers,
-        strip_tokens=[
-            *allow.order_refs, *PLACEHOLDER_URLS.keys(), VOUCHER_PLACEHOLDER, facts.first_name,
-            # Item labels come from the facts sheet ("1 x Home Appliances"); strip the name part so that a
-            # digit inside a product name can never be mistaken for an ungrounded number.
-            *sorted({item.split(" x ", 1)[-1] for o in facts.orders for item in o.items + o.cancelled_items}, key=len, reverse=True),
-        ],
-    )
-    checks.append(QACheck(
-        name="facts_grounded", passed=not problems,
-        detail="; ".join(problems[:6]) if problems else "Every date, amount and number matches the facts.",
-    ))
-
-    if not facts.has_voucher and VOUCHER_WORDS_RE.search(full):
-        checks.append(QACheck(name="policy_voucher", passed=False, detail="Mentions a voucher but none is granted."))
-    has_refund = any(o.freight_refund or o.refund_total for o in facts.orders)
-    if not has_refund and not facts.has_cancellation_offer and REFUND_WORDS_RE.search(full):
-        checks.append(QACheck(name="policy_refund", passed=False, detail="Mentions a refund but none is granted."))
-    guarantee = GUARANTEE_RE.search(full)
-    checks.append(QACheck(
-        name="no_guarantees", passed=guarantee is None,
-        detail=f"Avoid guarantees: '{guarantee.group(0)}'" if guarantee else "No guarantees made.",
-    ))
-    jargon = JARGON_RE.search(full)
-    checks.append(QACheck(
-        name="no_internal_jargon", passed=jargon is None,
-        detail=f"Internal term used: '{jargon.group(0)}'" if jargon else "No internal jargon.",
-    ))
+    checks.extend(_grounding_checks(full, facts, allow))
 
     missing: list[str] = []
     if not APOLOGY_RE.search(body):

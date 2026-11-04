@@ -20,6 +20,7 @@ from app.services.formatting import pretty_category
 from app.services.policy_engine import delay_all
 from app.services.reporting import ACTION_LABELS
 from app.services.retrieval.kb import kb_index
+from app.services.retrieval.policy_rag import PolicySection, retrieve_policy
 
 
 def _case(imp: OrderImpact, dec: MitigationDecision) -> dict:
@@ -56,6 +57,14 @@ class MitigationAgent:
         decisions = await asyncio.to_thread(decide, state.spec, ctx.ref, state.impacts, ctx.policy)
         by_order = {d.order_id: d for d in decisions}
         impacts_by_order = {i.order_id: i for i in state.impacts}
+        kb_by_id = kb_index(ctx.settings.kb_dir)
+
+        async def policy_search(query: str, exclude: tuple[str, ...] = ()) -> list[PolicySection]:
+            """Retrieval step for the AI: the policy sections that best answer `query` (hybrid search, keyword fallback)."""
+            return await retrieve_policy(
+                session_factory=ctx.session_factory, embedder=ctx.embedder, reranker=ctx.reranker, kb=kb_by_id,
+                query=query, limit=2, rerank_depth=ctx.settings.rerank_depth, exclude=exclude,
+            )
 
         review = [d for d in decisions if d.needs_review]
         review.sort(key=lambda d: -impacts_by_order[d.order_id].severity_score)
@@ -70,13 +79,14 @@ class MitigationAgent:
         agent_cases = to_adjudicate[: ctx.settings.max_agent_cases]
         if agent_cases:
             pc = ctx.ref.policy_context(state.spec, ctx.policy)
-            chunks = list(kb_index(ctx.settings.kb_dir).values())
+            chunks = list(kb_by_id.values())
             by_customer: dict[str, list[OrderImpact]] = {}
             for imp in state.impacts:
                 by_customer.setdefault(imp.customer_unique_id, []).append(imp)
             for dec in agent_cases:
                 imp = impacts_by_order[dec.order_id]
-                tools = CaseTools(imp=imp, dec=dec, pc=pc, kb=chunks, customer_impacts=by_customer.get(imp.customer_unique_id, []))
+                tools = CaseTools(imp=imp, dec=dec, pc=pc, kb=chunks, customer_impacts=by_customer.get(imp.customer_unique_id, []),
+                                  policy_search=policy_search)
                 try:
                     choice, rationale, trace = await investigate(
                         ctx.llm, tools, run_id=ctx.run_id, max_steps=ctx.settings.agent_max_steps
@@ -107,9 +117,20 @@ class MitigationAgent:
                 )
             to_adjudicate = [d for d in to_adjudicate if by_order[d.order_id].needs_review]
         if to_adjudicate:
-            kb = kb_index(ctx.settings.kb_dir)
+            kb = kb_by_id
             refs = sorted({r for d in to_adjudicate for r in d.policy_refs} | {"mitigation_playbook#mixed-orders-and-split-shipments"})
             policy_text = "\n\n".join(f"[{r}] {kb[r].heading}: {kb[r].text}" for r in refs if r in kb)
+            # Retrieval-augmented context: besides the sections the rules cite, search for the ones that best match why
+            # these cases were flagged, so the model also sees policy the rules did not point at.
+            reasons = " ; ".join(sorted({r for d in to_adjudicate for r in d.review_reasons}))[:400]
+            extra = await policy_search(f"{reasons} {state.spec.disruption_type} disruption", tuple(refs))
+            if extra:
+                policy_text += "\n\n" + "\n\n".join(f"[{s.id}] {s.heading}: {s.text}" for s in extra)
+                await ctx.emitter.emit(
+                    self.name, "info",
+                    f"Adjudicator context: policy sections retrieved by {extra[0].via} search: " + ", ".join(s.id for s in extra) + ".",
+                    {"retrieved": [s.id for s in extra], "via": extra[0].via},
+                )
             bs = ctx.settings.adjudication_batch_size
             for start in range(0, len(to_adjudicate), bs):
                 batch = to_adjudicate[start : start + bs]

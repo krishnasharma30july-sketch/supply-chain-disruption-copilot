@@ -71,3 +71,8 @@ concept_keywords:
     HIGH_VALUE_TECH: [electronics, electronic, tech, technology, gadget, gadgets, phone, phones, smartphone, computer, computers, laptop, laptops, eletronicos, celular, informatica]
     GIFT_SEASONAL: [gift, gifts, christmas, toy, toys, party, seasonal, presente, presentes, natal, brinquedo, brinquedos]
     FURNITURE_HOME: [home, household, housewares, homeware, appliance, appliances, casa, moveis, eletrodomestico, eletrodomesticos]
+
+# Confidence attached to a product's class (below policy.low_class_confidence the order is flagged for review).
+confidence:
+  missing_category: 0.3    # the product has no category at all
+  unlisted_category: 0.9   # a category that is not in the curated map above (default class applies)

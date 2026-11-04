@@ -185,6 +185,8 @@ class RunOptions(BaseModel):
     max_llm_emails: int | None = Field(default=None, ge=0, le=500)
     date_rebase: bool = False
     use_llm: bool = True
+    # Write every remaining email with the LLM in the background once the run is done. None follows the server default.
+    ai_all_emails: bool | None = None
 
 
 # --------------------------------------------------------------------------- reference data

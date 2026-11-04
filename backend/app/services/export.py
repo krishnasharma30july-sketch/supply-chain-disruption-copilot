@@ -86,6 +86,15 @@ def report_markdown(
             ("Estimated mitigation cost", f"R$ {s['cost']['total_brl']:,.2f}"),
         ]
         out += [f"| {k} | {v} |" for k, v in rows]
+        out += ["", "*Probabilities of missing the promised date assume the disruption unfolds exactly as described. They are "
+                "scenario estimates, not forecasts: the backtest shows them to be over-confident as real-world predictions "
+                "(ranking and recall are the strengths).*"]
+        ex = s.get("assumption_exposure") or {}
+        rely = ex.get("alt_route_orders", 0) + ex.get("alt_seller_orders", 0)
+        if rely:
+            out += ["", f"*Assumption exposure: {rely} of {sc['orders_delayed']} delayed orders ({ex.get('share_of_delayed', 0):.0%}) are rerouted on "
+                    f"assumed alternate-carrier capacity (A13) or assumed alternate-seller stock (A12); the data cannot confirm either. "
+                    f"Their extra cost of R$ {ex.get('extra_cost_brl', 0):,.2f} is an estimate.*"]
         out += ["", "### Decisions", "", "| Decision | Rule code | Orders |", "|---|---|---|"]
         out += [f"| {ACTION_LABELS.get(k, k)} | `{k}` | {v} |" for k, v in s["actions"].items()]
         out += ["", "### Recommendations", ""] + [f"- {r}" for r in summary["recommendations"]]
